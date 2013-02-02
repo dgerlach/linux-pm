@@ -212,10 +212,6 @@ static struct bridge_drv_interface drv_interface_fxns = {
 	bridge_msg_set_queue_id,
 };
 
-static struct notifier_block dsp_mbox_notifier = {
-	.notifier_call = io_mbox_msg,
-};
-
 static inline void flush_all(struct bridge_dev_context *dev_context)
 {
 	if (dev_context->brd_state == BRD_DSP_HIBERNATION ||
@@ -379,6 +375,8 @@ static int bridge_brd_start(struct bridge_dev_context *dev_ctxt,
 	u32 wdt_en = 0;
 	struct omap_dsp_platform_data *pdata =
 		omap_dspbridge_dev->dev.platform_data;
+	struct ipc_client mbox_user;
+	char mbox_user_name[32];
 
 	/* The device context contains all the mmu setup info from when the
 	 * last dsp base image was loaded. The first entry is always
@@ -542,9 +540,17 @@ static int bridge_brd_start(struct bridge_dev_context *dev_ctxt,
 		 * Enable Mailbox events and also drain any pending
 		 * stale messages.
 		 */
-		dev_context->mbox = omap_mbox_get("dsp", &dsp_mbox_notifier);
-		if (IS_ERR(dev_context->mbox)) {
-			dev_context->mbox = NULL;
+		mbox_user.txcb = NULL;
+		mbox_user.rxcb = io_mbox_msg;
+		mbox_user.cl_id = dev_context;
+		mbox_user.tx_block = false;
+		mbox_user.tx_tout = 0;
+		mbox_user.link_data = NULL;
+		mbox_user.knows_txdone = false;
+		sprintf(mbox_user_name, "omap2:dsp");
+		mbox_user.chan_name = mbox_user_name;
+		dev_context->mbox = ipc_request_channel(&mbox_user);
+		if (!dev_context->mbox) {
 			pr_err("%s: Failed to get dsp mailbox handle\n",
 								__func__);
 			status = -EPERM;
@@ -678,7 +684,7 @@ static int bridge_brd_stop(struct bridge_dev_context *dev_ctxt)
 	/* Disable the mailbox interrupts */
 	if (dev_context->mbox) {
 		omap_mbox_disable_irq(dev_context->mbox, IRQ_RX);
-		omap_mbox_put(dev_context->mbox, &dsp_mbox_notifier);
+		ipc_free_channel(dev_context->mbox);
 		dev_context->mbox = NULL;
 	}
 	/* Reset IVA2 clocks*/

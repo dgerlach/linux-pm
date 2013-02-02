@@ -15,15 +15,14 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #include <linux/omap-mailbox.h>
+#include <linux/mailbox_controller.h>
+
+struct omap_mbox;
 
 struct omap_mbox_ops {
-	int		(*startup)(struct omap_mbox *mbox);
-	void		(*shutdown)(struct omap_mbox *mbox);
 	/* fifo */
 	mbox_msg_t	(*fifo_read)(struct omap_mbox *mbox);
-	void		(*fifo_write)(struct omap_mbox *mbox, mbox_msg_t msg);
 	int		(*fifo_empty)(struct omap_mbox *mbox);
-	int		(*poll_for_space)(struct omap_mbox *mbox);
 	/* irq */
 	void		(*enable_irq)(struct omap_mbox *mbox,
 						omap_mbox_irq_t irq);
@@ -40,7 +39,6 @@ struct omap_mbox_queue {
 	spinlock_t		lock;
 	struct kfifo		fifo;
 	struct work_struct	work;
-	struct tasklet_struct	tasklet;
 	struct omap_mbox	*mbox;
 	bool full;
 };
@@ -52,21 +50,35 @@ struct omap_mbox_device {
 	u32 num_users;
 	u32 num_fifos;
 	struct omap_mbox **mboxes;
+	struct ipc_controller controller;
 };
 
 struct omap_mbox {
-	const char		*name;
 	unsigned int		irq;
-	struct omap_mbox_queue	*txq, *rxq;
+	struct omap_mbox_queue	*rxq;
 	struct omap_mbox_ops	*ops;
 	struct device		*dev;
 	struct omap_mbox_device *parent;
 	void			*priv;
 	int			use_count;
-	struct blocking_notifier_head	notifier;
+	struct ipc_link		link;
 };
 
-int omap_mbox_register(struct device *parent, struct omap_mbox **);
-int omap_mbox_unregister(void);
+static inline struct omap_mbox *link_to_omap_mbox(struct ipc_link *l)
+{
+	if (!l)
+		return NULL;
+
+	return container_of(l, struct omap_mbox, link);
+}
+
+int omap_mbox_startup(struct omap_mbox *mbox);
+void omap_mbox_fini(struct omap_mbox *mbox);
+
+int omap_mbox_register(struct omap_mbox_device *device);
+int omap_mbox_unregister(struct omap_mbox_device *device);
+
+int omap_mbox_init(int size);
+void omap_mbox_exit(void);
 
 #endif /* OMAP_MBOX_H */

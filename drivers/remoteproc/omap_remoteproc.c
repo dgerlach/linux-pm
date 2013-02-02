@@ -27,7 +27,8 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/remoteproc.h>
-#include <linux/omap-mailbox.h>
+#include <linux/mailbox.h>
+#include <linux/mailbox_client.h>
 
 #include <linux/platform_data/remoteproc-omap.h>
 
@@ -36,20 +37,17 @@
 
 /**
  * struct omap_rproc - omap remote processor state
- * @mbox: omap mailbox handle
- * @nb: notifier block that will be invoked on inbound mailbox messages
+ * @mbox: ipc mailbox handle
  * @rproc: rproc handle
  */
 struct omap_rproc {
-	struct omap_mbox *mbox;
-	struct notifier_block nb;
+	void *mbox;
 	struct rproc *rproc;
 };
 
 /**
  * omap_rproc_mbox_callback() - inbound mailbox message handler
- * @this: notifier block
- * @index: unused
+ * @context: context pointer passed during registrations
  * @data: mailbox payload
  *
  * This handler is invoked by omap's mailbox driver whenever a mailbox
@@ -61,11 +59,10 @@ struct omap_rproc {
  * that indicates different events. Those values are deliberately very
  * big so they don't coincide with virtqueue indices.
  */
-static int omap_rproc_mbox_callback(struct notifier_block *this,
-					unsigned long index, void *data)
+static void omap_rproc_mbox_callback(void *context, void *data)
 {
-	mbox_msg_t msg = (mbox_msg_t) data;
-	struct omap_rproc *oproc = container_of(this, struct omap_rproc, nb);
+	u32 msg = (u32)data;
+	struct omap_rproc *oproc = context;
 	struct device *dev = oproc->rproc->dev.parent;
 	const char *name = oproc->rproc->name;
 
@@ -84,8 +81,6 @@ static int omap_rproc_mbox_callback(struct notifier_block *this,
 		if (rproc_vq_interrupt(oproc->rproc, msg) == IRQ_NONE)
 			dev_dbg(dev, "no message was found in vqid %d\n", msg);
 	}
-
-	return NOTIFY_DONE;
 }
 
 /* kick a virtqueue */
@@ -96,8 +91,8 @@ static void omap_rproc_kick(struct rproc *rproc, int vqid)
 	int ret;
 
 	/* send the index of the triggered virtqueue in the mailbox payload */
-	ret = omap_mbox_msg_send(oproc->mbox, vqid);
-	if (ret)
+	ret = ipc_send_message(oproc->mbox, (void *)vqid);
+	if (!ret)
 		dev_err(dev, "omap_mbox_msg_send failed: %d\n", ret);
 }
 
@@ -115,17 +110,26 @@ static int omap_rproc_start(struct rproc *rproc)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct omap_rproc_pdata *pdata = pdev->dev.platform_data;
 	int ret;
+	struct ipc_client mbox_user;
+	char mbox_user_name[32];
 
 	if (pdata->set_bootaddr)
 		pdata->set_bootaddr(rproc->bootaddr);
 
-	oproc->nb.notifier_call = omap_rproc_mbox_callback;
+	mbox_user.txcb = NULL;
+	mbox_user.rxcb = omap_rproc_mbox_callback;
+	mbox_user.cl_id = oproc;
+	mbox_user.tx_block = false;
+	mbox_user.tx_tout = 0;
+	mbox_user.link_data = NULL;
+	mbox_user.knows_txdone = false;
+	sprintf(mbox_user_name, "omap2:%s", pdata->mbox_name);
+	mbox_user.chan_name = mbox_user_name;
 
-	/* every omap rproc is assigned a mailbox instance for messaging */
-	oproc->mbox = omap_mbox_get(pdata->mbox_name, &oproc->nb);
-	if (IS_ERR(oproc->mbox)) {
-		ret = PTR_ERR(oproc->mbox);
-		dev_err(dev, "omap_mbox_get failed: %d\n", ret);
+	oproc->mbox = ipc_request_channel(&mbox_user);
+	if (!oproc->mbox) {
+		ret = -EBUSY;
+		dev_err(dev, "ipc_request_channel failed: %d\n", ret);
 		return ret;
 	}
 
@@ -136,8 +140,8 @@ static int omap_rproc_start(struct rproc *rproc)
 	 * Note that the reply will _not_ arrive immediately: this message
 	 * will wait in the mailbox fifo until the remote processor is booted.
 	 */
-	ret = omap_mbox_msg_send(oproc->mbox, RP_MBOX_ECHO_REQUEST);
-	if (ret) {
+	ret = ipc_send_message(oproc->mbox, (void *)RP_MBOX_ECHO_REQUEST);
+	if (!ret) {
 		dev_err(dev, "omap_mbox_get failed: %d\n", ret);
 		goto put_mbox;
 	}
@@ -151,7 +155,7 @@ static int omap_rproc_start(struct rproc *rproc)
 	return 0;
 
 put_mbox:
-	omap_mbox_put(oproc->mbox, &oproc->nb);
+	ipc_free_channel(oproc->mbox);
 	return ret;
 }
 
@@ -168,7 +172,7 @@ static int omap_rproc_stop(struct rproc *rproc)
 	if (ret)
 		return ret;
 
-	omap_mbox_put(oproc->mbox, &oproc->nb);
+	ipc_free_channel(oproc->mbox);
 
 	return 0;
 }

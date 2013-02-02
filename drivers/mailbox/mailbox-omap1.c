@@ -27,6 +27,10 @@
 #define MAILBOX_DSP2ARM1_Flag		0x1c
 #define MAILBOX_DSP2ARM2_Flag		0x20
 
+static unsigned int mbox_kfifo_size = CONFIG_OMAP_MBOX_KFIFO_SIZE;
+module_param(mbox_kfifo_size, uint, S_IRUGO);
+MODULE_PARM_DESC(mbox_kfifo_size, "Size of omap's mailbox kfifo (bytes)");
+
 static struct omap_mbox_device omap1_mbox_device;
 
 struct omap_mbox1_fifo {
@@ -90,18 +94,6 @@ static int omap1_mbox_fifo_full(struct omap_mbox *mbox)
 	return mbox_read_reg(fifo->flag);
 }
 
-static int omap1_mbox_poll_for_space(struct omap_mbox *mbox)
-{
-	int i = 1000;
-
-	while (omap1_mbox_fifo_full(mbox)) {
-		if (--i == 0)
-			return -1;
-		udelay(1);
-	}
-	return 0;
-}
-
 /* irq */
 static void
 omap1_mbox_enable_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
@@ -130,11 +122,69 @@ omap1_mbox_is_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
 	return 1;
 }
 
+static int omap1_mbox_startup(struct ipc_link *link, void *ignored)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	struct omap_mbox_device *mdev = mbox->parent;
+	int ret = 0;
+
+	mutex_lock(&mdev->cfg_lock);
+	if (!mbox->use_count++) {
+		ret = omap_mbox_startup(mbox);
+		if (ret)
+			mbox->use_count--;
+	}
+	mutex_unlock(&mdev->cfg_lock);
+	return ret;
+}
+
+static void omap1_mbox_shutdown(struct ipc_link *link)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	struct omap_mbox_device *mdev = mbox->parent;
+
+	mutex_lock(&mdev->cfg_lock);
+	if (!--mbox->use_count)
+		omap_mbox_fini(mbox);
+	mutex_unlock(&mdev->cfg_lock);
+}
+
+static int omap1_mbox_send_data(struct ipc_link *link, void *data)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+
+	if (!mbox)
+		return -EINVAL;
+
+	/* sanity check, this should never happen with the current framework */
+	if (omap1_mbox_fifo_full(mbox))
+		return -EBUSY;
+
+	omap1_mbox_fifo_write(mbox, (mbox_msg_t) data);
+
+	return 0;
+}
+
+static bool omap1_mbox_is_ready(struct ipc_link *link)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+
+	if (WARN_ON(!mbox))
+		return false;
+
+	return omap1_mbox_fifo_full(mbox) ? false : true;
+}
+
+static struct ipc_link_ops omap1_link_ops = {
+	.startup	= omap1_mbox_startup,
+	.send_data	= omap1_mbox_send_data,
+	.shutdown	= omap1_mbox_shutdown,
+	.is_ready	= omap1_mbox_is_ready,
+};
+
 static struct omap_mbox_ops omap1_mbox_ops = {
 	.fifo_read	= omap1_mbox_fifo_read,
-	.fifo_write	= omap1_mbox_fifo_write,
 	.fifo_empty	= omap1_mbox_fifo_empty,
-	.poll_for_space	= omap1_mbox_poll_for_space,
 	.enable_irq	= omap1_mbox_enable_irq,
 	.disable_irq	= omap1_mbox_disable_irq,
 	.is_irq		= omap1_mbox_is_irq,
@@ -168,12 +218,15 @@ static struct omap_mbox *omap1_mboxes[] = { &mbox_dsp_info, NULL };
 static int omap1_mbox_probe(struct platform_device *pdev)
 {
 	struct resource *mem;
-	int ret;
+	int ret = 0;
 	struct omap_mbox **list;
 	struct omap_mbox_device *mdev = &omap1_mbox_device;
+	struct ipc_links *links[2] = {NULL, NULL};
 
 	list = omap1_mboxes;
 	list[0]->irq = platform_get_irq_byname(pdev, "dsp");
+	snprintf(list[0]->link.link_name, 16, "dsp");
+	links[0] = &list[0]->link;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem)
@@ -188,24 +241,34 @@ static int omap1_mbox_probe(struct platform_device *pdev)
 	mdev->num_users = 2;
 	mdev->num_fifos = 4;
 
-	ret = omap_mbox_register(&pdev->dev, list);
-	if (ret) {
-		iounmap(mdev->mbox_base);
-		return ret;
-	}
+	/* OMAP1 does not have a Tx-Done or Tx-Ready IRQ */
+	mdev->controller.txdone_irq = false;
+	mdev->controller.txdone_poll = true;
+	mdev->controller.txpoll_period = 1;
+	mdev->controller.ops = &omap1_link_ops;
+	mdev->controller.links = links;
+	snprintf(mdev->controller.controller_name, 16, "omap1");
+	ret = omap_mbox_register(mdev);
+	if (ret)
+		goto unmap_mbox;
 
 	return 0;
+
+unmap_mbox:
+	iounmap(mdev->mbox_base);
+	return ret;
 }
 
 static int omap1_mbox_remove(struct platform_device *pdev)
 {
 	struct omap_mbox_device *mdev = &omap1_mbox_device;
 
-	omap_mbox_unregister();
+	omap_mbox_unregister(mdev);
 	iounmap(mdev->mbox_base);
 	mdev->mbox_base = NULL;
 	mdev->list = NULL;
 	mdev->dev = NULL;
+	mdev->controller.links = NULL;
 
 	return 0;
 }
@@ -220,12 +283,16 @@ static struct platform_driver omap1_mbox_driver = {
 
 static int __init omap1_mbox_init(void)
 {
+	omap_mbox_init(mbox_kfifo_size);
+
 	return platform_driver_register(&omap1_mbox_driver);
 }
 
 static void __exit omap1_mbox_exit(void)
 {
 	platform_driver_unregister(&omap1_mbox_driver);
+
+	omap_mbox_exit();
 }
 
 module_init(omap1_mbox_init);

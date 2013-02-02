@@ -43,6 +43,10 @@
 #define MBOX_NR_REGS			(MBOX_REG_SIZE / sizeof(u32))
 #define OMAP4_MBOX_NR_REGS		(OMAP4_MBOX_REG_SIZE / sizeof(u32))
 
+static unsigned int mbox_kfifo_size = CONFIG_OMAP_MBOX_KFIFO_SIZE;
+module_param(mbox_kfifo_size, uint, S_IRUGO);
+MODULE_PARM_DESC(mbox_kfifo_size, "Size of omap's mailbox kfifo (bytes)");
+
 struct omap_mbox2_fifo {
 	unsigned long msg;
 	unsigned long fifo_stat;
@@ -74,7 +78,7 @@ void mbox_write_reg(struct omap_mbox_device *mdev, u32 val, size_t ofs)
 }
 
 /* Mailbox H/W preparations */
-static int omap2_mbox_startup(struct omap_mbox *mbox)
+static int _omap2_mbox_startup(struct omap_mbox *mbox)
 {
 	pm_runtime_get_sync(mbox->parent->dev);
 
@@ -90,7 +94,7 @@ static int omap2_mbox_startup(struct omap_mbox *mbox)
 	return 0;
 }
 
-static void omap2_mbox_shutdown(struct omap_mbox *mbox)
+static void _omap2_mbox_shutdown(struct omap_mbox *mbox)
 {
 	pm_runtime_put_sync(mbox->parent->dev);
 }
@@ -122,14 +126,6 @@ static int omap2_mbox_fifo_full(struct omap_mbox *mbox)
 	struct omap_mbox2_fifo *fifo =
 		&((struct omap_mbox2_priv *)mbox->priv)->tx_fifo;
 	return mbox_read_reg(mbox->parent, fifo->fifo_stat);
-}
-
-static int omap2_mbox_poll_for_space(struct omap_mbox *mbox)
-{
-	if (omap2_mbox_fifo_full(mbox))
-		return -1;
-
-	return 0;
 }
 
 /* Mailbox IRQ handle functions */
@@ -215,13 +211,64 @@ static void omap2_mbox_restore_ctx(struct omap_mbox *mbox)
 	}
 }
 
-static struct omap_mbox_ops omap2_mbox_ops = {
+static int omap2_mbox_startup(struct ipc_link *link, void *ignored)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	struct omap_mbox_device *mdev = mbox->parent;
+	int ret = 0;
+
+	mutex_lock(&mdev->cfg_lock);
+	_omap2_mbox_startup(mbox);
+	if (!mbox->use_count++) {
+		ret = omap_mbox_startup(mbox);
+		if (ret) {
+			mbox->use_count--;
+			_omap2_mbox_shutdown(mbox);
+		}
+	}
+	mutex_unlock(&mdev->cfg_lock);
+	return ret;
+}
+
+static void omap2_mbox_shutdown(struct ipc_link *link)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	struct omap_mbox_device *mdev = mbox->parent;
+
+	mutex_lock(&mdev->cfg_lock);
+	if (!--mbox->use_count)
+		omap_mbox_fini(mbox);
+	_omap2_mbox_shutdown(mbox);
+	mutex_unlock(&mdev->cfg_lock);
+}
+
+static int omap2_mbox_send_data(struct ipc_link *link, void *data)
+{
+	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	int ret = -EBUSY;
+
+	if (!mbox)
+		return -EINVAL;
+
+	if (!omap2_mbox_fifo_full(mbox)) {
+		omap2_mbox_fifo_write(mbox, (mbox_msg_t)data);
+		ret = 0;
+	}
+
+	/* always enable the interrupt */
+	omap2_mbox_enable_irq(mbox, IRQ_TX);
+	return ret;
+}
+
+static struct ipc_link_ops omap2_link_ops = {
 	.startup	= omap2_mbox_startup,
+	.send_data	= omap2_mbox_send_data,
 	.shutdown	= omap2_mbox_shutdown,
+};
+
+static struct omap_mbox_ops omap2_mbox_ops = {
 	.fifo_read	= omap2_mbox_fifo_read,
-	.fifo_write	= omap2_mbox_fifo_write,
 	.fifo_empty	= omap2_mbox_fifo_empty,
-	.poll_for_space	= omap2_mbox_poll_for_space,
 	.enable_irq	= omap2_mbox_enable_irq,
 	.disable_irq	= omap2_mbox_disable_irq,
 	.ack_irq	= omap2_mbox_ack_irq,
@@ -249,6 +296,7 @@ static int omap2_mbox_probe(struct platform_device *pdev)
 {
 	struct resource *mem;
 	int ret;
+	struct ipc_link **links;
 	struct omap_mbox **list, *mbox, *mboxblk;
 	struct omap_mbox2_priv *priv, *privblk;
 	struct omap_mbox_pdata *pdata = pdev->dev.platform_data;
@@ -353,10 +401,16 @@ static int omap2_mbox_probe(struct platform_device *pdev)
 		goto free_mdev;
 	}
 
+	links = kzalloc((info_count + 1) * sizeof(*links), GFP_KERNEL);
+	if (!links) {
+		ret = -ENOMEM;
+		goto free_list;
+	}
+
 	mboxblk = mbox = kzalloc(info_count * sizeof(*mbox), GFP_KERNEL);
 	if (!mboxblk) {
 		ret = -ENOMEM;
-		goto free_list;
+		goto free_links;
 	}
 
 	privblk = priv = kzalloc(info_count * sizeof(*priv), GFP_KERNEL);
@@ -386,14 +440,15 @@ static int omap2_mbox_probe(struct platform_device *pdev)
 
 		mbox->priv = priv;
 		mbox->parent = mdev;
-		mbox->name = info->name;
 		mbox->ops = &omap2_mbox_ops;
 		mbox->irq = platform_get_irq(pdev, info->irq_id);
 		if (mbox->irq < 0) {
 			ret = mbox->irq;
 			goto free_privblk;
 		}
+		snprintf(mbox->link.link_name, 16, "%s", info->name);
 		list[i] = mbox++;
+		links[i] = &list[i]->link;
 	}
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -413,11 +468,16 @@ static int omap2_mbox_probe(struct platform_device *pdev)
 	mdev->num_users = num_users;
 	mdev->num_fifos = num_fifos;
 	mdev->mboxes = list;
-	ret = omap_mbox_register(&pdev->dev, list);
+	/* OMAP does not have a Tx-Done IRQ, but rather a Tx-Ready IRQ */
+	mdev->controller.txdone_irq = true;
+	mdev->controller.ops = &omap2_link_ops;
+	mdev->controller.links = links;
+	snprintf(mdev->controller.controller_name, 16, "omap2");
+	ret = omap_mbox_register(mdev);
 	if (ret)
 		goto unmap_mbox;
-	platform_set_drvdata(pdev, mdev);
 
+	platform_set_drvdata(pdev, mdev);
 	pm_runtime_enable(mdev->dev);
 
 	kfree(of_info);
@@ -429,6 +489,8 @@ free_privblk:
 	kfree(privblk);
 free_mboxblk:
 	kfree(mboxblk);
+free_links:
+	kfree(links);
 free_list:
 	kfree(list);
 free_mdev:
@@ -444,15 +506,17 @@ static int omap2_mbox_remove(struct platform_device *pdev)
 	struct omap_mbox_device *mdev = platform_get_drvdata(pdev);
 	struct omap_mbox **list = mdev->mboxes;
 	struct omap_mbox *mboxblk = list[0];
+	struct ipc_link **links = mdev->controller.links;
 
 	pm_runtime_disable(mdev->dev);
 
 	privblk = mboxblk->priv;
-	omap_mbox_unregister();
+	omap_mbox_unregister(mdev);
 	iounmap(mdev->mbox_base);
 	kfree(privblk);
 	kfree(mboxblk);
 	kfree(list);
+	kfree(links);
 	kfree(mdev);
 	platform_set_drvdata(pdev, NULL);
 
@@ -470,12 +534,16 @@ static struct platform_driver omap2_mbox_driver = {
 
 static int __init omap2_mbox_init(void)
 {
+	omap_mbox_init(mbox_kfifo_size);
+
 	return platform_driver_register(&omap2_mbox_driver);
 }
 
 static void __exit omap2_mbox_exit(void)
 {
 	platform_driver_unregister(&omap2_mbox_driver);
+
+	omap_mbox_exit();
 }
 
 module_init(omap2_mbox_init);

@@ -80,13 +80,11 @@ extern void io_dpc(unsigned long ref_data);
  *	Determine if this message is ours, then schedules a DPC to
  *	dispatch I/O.
  *  Parameters:
- *	self:	Pointer to its own notifier_block struct.
- *	len:	Length of message.
- *	msg:	Message code received.
+ *	context: Context pointer registered with mailbox core.
+ *	msg:	 Message code received.
  *  Returns:
- *	NOTIFY_OK if handled; NOTIFY_BAD otherwise.
  */
-int io_mbox_msg(struct notifier_block *self, unsigned long len, void *msg);
+void io_mbox_msg(void *context, void *msg);
 
 /*
  *  ======== io_request_chnl ========
