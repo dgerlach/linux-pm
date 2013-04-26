@@ -19,7 +19,7 @@
 #include <linux/cpu.h>
 #include <linux/err.h>
 #include <linux/of.h>
-#include <linux/pl320-ipc.h>
+#include <linux/mailbox_client.h>
 #include <linux/platform_device.h>
 
 #define HB_CPUFREQ_CHANGE_NOTE	0x80000001
@@ -29,8 +29,26 @@
 static int hb_voltage_change(unsigned int freq)
 {
 	u32 msg[HB_CPUFREQ_IPC_LEN] = {HB_CPUFREQ_CHANGE_NOTE, freq / 1000000};
+	struct ipc_client cl;
+	int ret = -ETIMEDOUT;
+	void *chan;
 
-	return pl320_ipc_transmit(msg);
+	cl.rxcb = NULL;
+	cl.txcb = NULL;
+	cl.tx_block = true;
+	cl.tx_tout = 1000; /* 1 sec */
+	cl.link_data = NULL;
+	cl.knows_txdone = false;
+	cl.chan_name = "pl320:A9_to_M3";
+
+	chan = ipc_request_channel(&cl);
+
+	if (ipc_send_message(chan, (void *)msg))
+		ret = msg[1]; /* PL320 updates buffer with FIFO after ACK */
+
+	ipc_free_channel(chan);
+
+	return ret;
 }
 
 static int hb_cpufreq_clk_notify(struct notifier_block *nb,
