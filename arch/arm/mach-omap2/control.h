@@ -370,6 +370,22 @@
 #define AM33XX_DEV_FEATURE		0x604
 #define AM33XX_SGX_MASK			BIT(29)
 
+/* AM33XX M3_TXEV_EOI register */
+#define AM33XX_CONTROL_M3_TXEV_EOI	0x1324
+
+#define AM33XX_M3_TXEV_ACK		(0x1 << 0)
+#define AM33XX_M3_TXEV_ENABLE		(0x0 << 0)
+
+/* AM33XX IPC message registers */
+#define AM33XX_CONTROL_IPC_MSG_REG0	0x1328
+#define AM33XX_CONTROL_IPC_MSG_REG1	0x132C
+#define AM33XX_CONTROL_IPC_MSG_REG2	0x1330
+#define AM33XX_CONTROL_IPC_MSG_REG3	0x1334
+#define AM33XX_CONTROL_IPC_MSG_REG4	0x1338
+#define AM33XX_CONTROL_IPC_MSG_REG5	0x133C
+#define AM33XX_CONTROL_IPC_MSG_REG6	0x1340
+#define AM33XX_CONTROL_IPC_MSG_REG7	0x1344
+
 /* CONTROL OMAP STATUS register to identify OMAP3 features */
 #define OMAP3_CONTROL_OMAP_STATUS	0x044c
 
@@ -429,6 +445,44 @@ extern void omap3630_ctrl_disable_rta(void);
 extern int omap3_ctrl_save_padconf(void);
 extern void omap2_set_globals_control(void __iomem *ctrl,
 				      void __iomem *ctrl_pad);
+struct am33xx_ipc_data {
+	u32 resume_addr;
+	u32 sleep_mode;
+	u32 param1;
+	u32 param2;
+	u32 param3;
+	u32 param4;
+	u32 param5;
+	u32 param6;
+};
+
+#define IPC_RESP_SHIFT			16
+#define IPC_RESP_MASK			(0xffff << 16)
+
+#define M3_VERSION_SHIFT		0
+#define M3_VERSION_MASK			(0xffff << 0)
+
+/*
+ * 9-4 = VTT GPIO PIN (6 Bits)
+ *   3 = VTT Status (1 Bit)
+ * 2-0 = Memory Type (2 Bits)
+*/
+#define MEM_TYPE_SHIFT		(0x0)
+#define MEM_TYPE_MASK		(0x7 << 0)
+#define VTT_STAT_SHIFT		(0x3)
+#define VTT_STAT_MASK		(0x1 << 3)
+#define VTT_GPIO_PIN_SHIFT	(0x4)
+#define VTT_GPIO_PIN_MASK	(0x2f << 4)
+
+extern void am33xx_wkup_m3_ipc_cmd(struct am33xx_ipc_data *data);
+extern void am33xx_txev_eoi(void);
+extern void am33xx_txev_enable(void);
+extern void am33xx_pm_version_clear(void);
+extern int am33xx_pm_version_get(void);
+extern void am33xx_pm_ipc_cmd(struct am33xx_ipc_data *data);
+extern int am33xx_pm_status(void);
+extern int am33xx_pm_wake_src(void);
+
 #else
 #define omap_ctrl_base_get()		0
 #define omap_ctrl_readb(x)		0

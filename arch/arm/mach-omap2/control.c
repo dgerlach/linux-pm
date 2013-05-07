@@ -605,3 +605,60 @@ int omap3_ctrl_save_padconf(void)
 }
 
 #endif /* CONFIG_ARCH_OMAP3 && CONFIG_PM */
+
+#if defined(CONFIG_SOC_AM33XX) && defined(CONFIG_PM)
+void am33xx_txev_eoi(void)
+{
+	omap_ctrl_writel(AM33XX_M3_TXEV_ACK, AM33XX_CONTROL_M3_TXEV_EOI);
+}
+
+void am33xx_txev_enable(void)
+{
+	omap_ctrl_writel(AM33XX_M3_TXEV_ENABLE, AM33XX_CONTROL_M3_TXEV_EOI);
+}
+
+/*
+ * Invalidate M3 firmware version before hardreset.
+ * Write invalid version in lower 4 nibbles of parameter
+ * register (ipc_regs + 0x8).
+ */
+void am33xx_pm_version_clear(void)
+{
+	omap_ctrl_writel(0xffff0000, AM33XX_CONTROL_IPC_MSG_REG2);
+}
+
+int am33xx_pm_version_get(void)
+{
+	return omap_ctrl_readl(AM33XX_CONTROL_IPC_MSG_REG2) & M3_VERSION_MASK;
+}
+
+void am33xx_pm_ipc_cmd(struct am33xx_ipc_data *data)
+{
+	omap_ctrl_writel(data->resume_addr, AM33XX_CONTROL_IPC_MSG_REG0);
+	omap_ctrl_writel(data->sleep_mode, AM33XX_CONTROL_IPC_MSG_REG1);
+	omap_ctrl_writel(data->param1, AM33XX_CONTROL_IPC_MSG_REG2);
+	omap_ctrl_writel(data->param2, AM33XX_CONTROL_IPC_MSG_REG3);
+	omap_ctrl_writel(data->param3, AM33XX_CONTROL_IPC_MSG_REG4);
+}
+
+int am33xx_pm_status(void)
+{
+	int i;
+
+	i = omap_ctrl_readl(AM33XX_CONTROL_IPC_MSG_REG1);
+	i &= IPC_RESP_MASK;
+	i >>= __ffs(IPC_RESP_MASK);
+
+	return i;
+}
+
+int am33xx_pm_wake_src(void)
+{
+	int i;
+
+	i = omap_ctrl_readl(AM33XX_CONTROL_IPC_MSG_REG6);
+	i &= 0xff;
+
+	return i;
+}
+#endif /* CONFIG_SOC_AM33XX && CONFIG_PM */
