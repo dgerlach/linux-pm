@@ -1,0 +1,22 @@
+AM335x Power Management bindings
+
+Support for VTT Toggle
+
+In order to enable the support for VTT toggle during Suspend/Resume sequence
+needed by some boards (like EVM-SK), below DT properties needs to be added
+under the M3 Wakeup Node
+
+Required properties:
+- ti,needs_vtt_toggle:	Indicates that the boards requires VTT toggling
+			during suspend/resume.
+- vtt-gpio-pin:	Specifies the GPIO pin used for VTT toggle.
+
+Important Note:
+- Here it is assumed that VTT Toggle will be done using a pin on GPIO-0 Instance
+
+Example:
+	wkup_m3: wkup_m3@44d00000 {
+		ti,needs_vtt_toggle;
+		vtt-gpio-pin = <7>;
+	};
+
