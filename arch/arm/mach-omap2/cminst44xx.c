@@ -285,9 +285,6 @@ int omap4_cminst_wait_module_ready(u8 part, u16 inst, s16 cdoffs,
 {
 	int i = 0;
 
-	if (!clkctrl_offs)
-		return 0;
-
 	omap_test_timeout(_is_module_ready(part, inst, cdoffs, clkctrl_offs),
 			  MAX_MODULE_READY_TIME, i);
 
@@ -309,9 +306,6 @@ int omap4_cminst_wait_module_ready(u8 part, u16 inst, s16 cdoffs,
 int omap4_cminst_wait_module_idle(u8 part, u16 inst, s16 cdoffs, u16 clkctrl_offs)
 {
 	int i = 0;
-
-	if (!clkctrl_offs)
-		return 0;
 
 	omap_test_timeout((_clkctrl_idlest(part, inst, cdoffs, clkctrl_offs) ==
 			   CLKCTRL_IDLEST_DISABLED),
