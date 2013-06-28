@@ -87,6 +87,8 @@ struct device *omap_device_get_by_hwmod_name(const char *oh_name);
 
 /* OMAP PM interface */
 int omap_device_get_context_loss_count(struct platform_device *pdev);
+int omap_device_enable_hwmods(struct omap_device *od);
+int omap_device_idle_hwmods(struct omap_device *od);
 
 /* Other */
 

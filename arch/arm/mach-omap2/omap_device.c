@@ -219,6 +219,10 @@ static int _omap_device_enable_hwmods(struct omap_device *od)
 	return 0;
 }
 
+int omap_device_enable_hwmods(struct omap_device *od)
+{
+	_omap_device_enable_hwmods(od);
+}
 /**
  * _omap_device_idle_hwmods - call omap_hwmod_idle() on all hwmods
  * @od: struct omap_device *od
@@ -236,6 +240,10 @@ static int _omap_device_idle_hwmods(struct omap_device *od)
 	return 0;
 }
 
+int omap_device_idle_hwmods(struct omap_device *od)
+{
+	_omap_device_idle_hwmods(od);
+}
 /* Public functions for use by core code */
 
 /**
