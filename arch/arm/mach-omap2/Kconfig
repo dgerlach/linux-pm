@@ -67,11 +67,14 @@ config SOC_OMAP5
 config SOC_AM33XX
 	bool "AM33XX support"
 	depends on ARCH_MULTI_V7
-	select ARCH_OMAP2PLUS
+	default y
 	select ARM_CPU_SUSPEND if PM
-	select CPU_V7
-	select MULTI_IRQ_HANDLER
 	select COMMON_CLK
+	select CPU_V7
+	select MAILBOX if PM
+	select MULTI_IRQ_HANDLER
+	select OMAP_MBOX_FWK if PM
+	select OMAP2PLUS_MBOX if PM
 
 config SOC_AM43XX
 	bool "TI AM43x"

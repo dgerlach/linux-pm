@@ -305,7 +305,8 @@ int __init omap2_common_pm_late_init(void)
 	}
 
 #ifdef CONFIG_SUSPEND
-	suspend_set_ops(&omap_pm_ops);
+	if (!soc_is_am33xx())
+		suspend_set_ops(&omap_pm_ops);
 #endif
 
 	return 0;
