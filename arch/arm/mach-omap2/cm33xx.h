@@ -29,6 +29,8 @@
 #define AM33XX_CM_REGADDR(inst, reg)				\
 	AM33XX_L4_WK_IO_ADDRESS(AM33XX_CM_BASE + (inst) + (reg))
 
+#define AM33XX_CM_PARTITION	1
+
 /* CM instances */
 #define AM33XX_CM_PER_MOD		0x0000
 #define AM33XX_CM_WKUP_MOD		0x0400
