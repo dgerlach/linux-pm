@@ -19,8 +19,10 @@
 #include "iomap.h"
 #include "common.h"
 #include "prcm-common.h"
+#include "prm33xx.h"
 #include "prm44xx.h"
 #include "prminst44xx.h"
+#include "prm-regbits-33xx.h"
 #include "prm-regbits-44xx.h"
 #include "prcm44xx.h"
 #include "prcm_mpu44xx.h"
@@ -189,4 +191,22 @@ void omap4_prminst_global_warm_sw_reset(void)
 	v = omap4_prminst_read_inst_reg(OMAP4430_PRM_PARTITION,
 				    OMAP4430_PRM_DEVICE_INST,
 				    OMAP4_PRM_RSTCTRL_OFFSET);
+}
+
+void am33xx_prminst_global_warm_sw_reset(void)
+{
+	u32 v;
+
+	v = omap4_prminst_read_inst_reg(AM33XX_PRM_PARTITION,
+				    AM33XX_PRM_DEVICE_MOD,
+				    AM33XX_PRM_RSTCTRL_OFFSET);
+	v |= AM33XX_GLOBAL_WARM_SW_RST_MASK;
+	omap4_prminst_write_inst_reg(v, AM33XX_PRM_PARTITION,
+				 AM33XX_PRM_DEVICE_MOD,
+				 AM33XX_PRM_RSTCTRL_OFFSET);
+
+	/* OCP barrier */
+	v = omap4_prminst_read_inst_reg(AM33XX_PRM_PARTITION,
+				    AM33XX_PRM_DEVICE_MOD,
+				    AM33XX_PRM_RSTCTRL_OFFSET);
 }
