@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/delay.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
@@ -133,44 +134,65 @@ static void omap2_mbox_enable_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
 {
 	struct omap_mbox2_priv *p = mbox->priv;
 	u32 l, bit = (irq == IRQ_TX) ? p->notfull_bit : p->newmsg_bit;
+	unsigned long irqenable = p->irqenable;
 
-	l = mbox_read_reg(mbox->parent, p->irqenable);
+	if (!strcmp(mbox->link.link_name, "wkup_m3") && (irq == IRQ_TX))
+		irqenable = OMAP4_MAILBOX_IRQENABLE(0);
+
+	l = mbox_read_reg(mbox->parent, irqenable);
 	l |= bit;
-	mbox_write_reg(mbox->parent, l, p->irqenable);
+	mbox_write_reg(mbox->parent, l, irqenable);
 }
 
 static void omap2_mbox_disable_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
 {
 	struct omap_mbox2_priv *p = mbox->priv;
 	u32 bit = (irq == IRQ_TX) ? p->notfull_bit : p->newmsg_bit;
+	unsigned long irqdisable = p->irqdisable;
+
+	if (!strcmp(mbox->link.link_name, "wkup_m3") && (irq == IRQ_TX))
+		irqdisable = OMAP4_MAILBOX_IRQENABLE_CLR(0);
 
 	/*
 	 * Read and update the interrupt configuration register for pre-OMAP4.
 	 * OMAP4 and later SoCs have a dedicated interrupt disabling register.
 	 */
 	if (!p->intr_type)
-		bit = mbox_read_reg(mbox->parent, p->irqdisable) & ~bit;
+		bit = mbox_read_reg(mbox->parent, irqdisable) & ~bit;
 
-	mbox_write_reg(mbox->parent, bit, p->irqdisable);
+	mbox_write_reg(mbox->parent, bit, irqdisable);
 }
 
 static void omap2_mbox_ack_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
 {
 	struct omap_mbox2_priv *p = mbox->priv;
 	u32 bit = (irq == IRQ_TX) ? p->notfull_bit : p->newmsg_bit;
+	unsigned long irqstatus = p->irqstatus;
 
-	mbox_write_reg(mbox->parent, bit, p->irqstatus);
+	if (!strcmp(mbox->link.link_name, "wkup_m3") && (irq == IRQ_TX))
+		irqstatus = OMAP4_MAILBOX_IRQSTATUS(0);
+
+	mbox_write_reg(mbox->parent, bit, irqstatus);
 
 	/* Flush posted write for irq status to avoid spurious interrupts */
-	mbox_read_reg(mbox->parent, p->irqstatus);
+	mbox_read_reg(mbox->parent, irqstatus);
 }
 
 static int omap2_mbox_is_irq(struct omap_mbox *mbox, omap_mbox_irq_t irq)
 {
 	struct omap_mbox2_priv *p = mbox->priv;
 	u32 bit = (irq == IRQ_TX) ? p->notfull_bit : p->newmsg_bit;
-	u32 enable = mbox_read_reg(mbox->parent, p->irqenable);
-	u32 status = mbox_read_reg(mbox->parent, p->irqstatus);
+	unsigned long irqstatus = p->irqstatus;
+	unsigned long irqenable = p->irqenable;
+	u32 enable, status;
+
+	if (!strcmp(mbox->link.link_name, "wkup_m3") && (irq==IRQ_TX)) {
+		irqenable = OMAP4_MAILBOX_IRQENABLE(0);
+		irqstatus = OMAP4_MAILBOX_IRQSTATUS(0);
+	}
+
+	enable = mbox_read_reg(mbox->parent, irqenable);
+	status = mbox_read_reg(mbox->parent, irqstatus);
 
 	return (int)(enable & status & bit);
 }
@@ -245,14 +267,34 @@ static void omap2_mbox_shutdown(struct ipc_link *link)
 static int omap2_mbox_send_data(struct ipc_link *link, void *data)
 {
 	struct omap_mbox *mbox = link_to_omap_mbox(link);
+	mbox_msg_t msg;
 	int ret = -EBUSY;
 
 	if (!mbox)
 		return -EINVAL;
 
 	if (!omap2_mbox_fifo_full(mbox)) {
+		/*
+		 * We only want the Wkup-M3 processor to be
+		 * interrupted once, so have the Rx interrupt
+		 * turned on only while writing a message
+		 */
+		if (!strcmp(link->link_name, "wkup_m3"))
+			omap2_mbox_enable_irq(mbox, IRQ_RX);
 		omap2_mbox_fifo_write(mbox, (mbox_msg_t)data);
+		if (!strcmp(link->link_name, "wkup_m3"))
+			omap2_mbox_disable_irq(mbox, IRQ_RX);
 		ret = 0;
+	}
+
+	/*
+	 * Treat WkupM3 mailbox from AM335 specially, read back
+	 * the message and ack the interrupt since the Wkup-M3
+	 * processor cannot access the mailbox registers
+	 */
+	if (!strcmp(link->link_name, "wkup_m3") && !ret) {
+		msg = omap2_mbox_fifo_read(mbox);
+		omap2_mbox_ack_irq(mbox, IRQ_RX);
 	}
 
 	/* always enable the interrupt */
