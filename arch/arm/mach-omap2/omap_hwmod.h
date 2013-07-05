@@ -568,6 +568,7 @@ struct omap_hwmod_link {
  * @voltdm: pointer to voltage domain (filled in at runtime)
  * @dev_attr: arbitrary device attributes that can be passed to the driver
  * @_sysc_cache: internal-use hwmod flags
+ * @mpu_rt_idx: index of device address space for register target (for DT boot)
  * @_mpu_rt_va: cached register target start address (internal use)
  * @_mpu_port: cached MPU register target slave (internal use)
  * @opt_clks_cnt: number of @opt_clks
@@ -612,6 +613,7 @@ struct omap_hwmod {
 	struct list_head		slave_ports; /* connect to *_TA */
 	void				*dev_attr;
 	u32				_sysc_cache;
+	int				mpu_rt_idx;
 	void __iomem			*_mpu_rt_va;
 	spinlock_t			_lock;
 	struct list_head		node;
