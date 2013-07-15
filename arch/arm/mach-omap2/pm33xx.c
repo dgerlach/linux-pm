@@ -25,9 +25,9 @@
 #include <linux/suspend.h>
 #include <linux/completion.h>
 #include <linux/module.h>
-#include "../plat-omap/include/plat/mailbox.h"
 #include <linux/interrupt.h>
 #include <linux/ti_emif.h>
+#include <linux/mailbox_client.h>
 
 #include <asm/suspend.h>
 #include <asm/proc-fns.h>
@@ -193,13 +193,9 @@ static int am33xx_ping_wkup_m3(void)
 {
 	int ret = 0;
 
-	omap_mbox_enable_irq(am33xx_pm->mbox, IRQ_RX);
+	ret = ipc_send_message(am33xx_pm->mbox, (void *)0xABCDABCD);
 
-	ret = omap_mbox_msg_send(am33xx_pm->mbox, 0xABCDABCD);
-
-	omap_mbox_disable_irq(am33xx_pm->mbox, IRQ_RX);
-
-	return ret;
+	return !ret;
 }
 
 static void am33xx_m3_state_machine_reset(void)
@@ -298,15 +294,12 @@ int am33xx_txev_handler()
 		break;
 	case M3_STATE_MSG_FOR_RESET:
 		am33xx_pm->state = M3_STATE_INITED;
-		omap_mbox_msg_rx_flush(am33xx_pm->mbox);
 		complete(&am33xx_pm_sync);
 		break;
 	case M3_STATE_MSG_FOR_LP:
-		omap_mbox_msg_rx_flush(am33xx_pm->mbox);
 		complete(&am33xx_pm_sync);
 		break;
 	case M3_STATE_UNKNOWN:
-		omap_mbox_msg_rx_flush(am33xx_pm->mbox);
 		ret = -1;
 	}
 
@@ -317,6 +310,8 @@ static void am33xx_pm_firmware_cb(const struct firmware *fw, void *context)
 {
 	struct am33xx_pm_context *am33xx_pm = context;
 	int ret = 0;
+	struct ipc_client wkup_m3_mbox_user;
+	char wkup_m3_mbox_name[32];
 
 	/* no firmware found */
 	if (!fw) {
@@ -351,9 +346,22 @@ static void am33xx_pm_firmware_cb(const struct firmware *fw, void *context)
 	}
 
 	/* Reserve the MBOX for sending messages to M3 */
-	am33xx_pm->mbox = omap_mbox_get("wkup_m3", &wkup_mbox_notifier);
-	if (IS_ERR(am33xx_pm->mbox))
-		pr_err("Could not reserve mailbox for A8->M3 IPC\n");
+	wkup_m3_mbox_user.txcb = NULL;
+	wkup_m3_mbox_user.rxcb = NULL;
+	wkup_m3_mbox_user.cl_id = NULL;
+	wkup_m3_mbox_user.tx_block = false;
+	wkup_m3_mbox_user.tx_tout = 0;
+	wkup_m3_mbox_user.link_data = NULL;
+	wkup_m3_mbox_user.knows_txdone = false;
+	sprintf(wkup_m3_mbox_name, "omap2:wkup_m3");
+	wkup_m3_mbox_user.chan_name = wkup_m3_mbox_name;
+
+	am33xx_pm->mbox = ipc_request_channel(&wkup_m3_mbox_user);
+	if (!am33xx_pm->mbox) {
+		ret = -EBUSY;
+		pr_err("IPC Request for A8->M3 Channel failed!\n");
+		return ret;
+	}
 
 	return;
 }
