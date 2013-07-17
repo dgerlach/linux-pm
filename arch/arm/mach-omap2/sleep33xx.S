@@ -56,8 +56,7 @@ ENTRY(am33xx_do_wfi)
 	 * SCTLR.C bit.
 	 */
 	ldr	r1, kernel_flush
-	mov	lr, pc
-	bx	r1
+	blx	r1
 
 	/*
 	 * Clear the SCTLR.C bit to prevent further data cache
