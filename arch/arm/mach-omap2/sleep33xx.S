@@ -76,17 +76,6 @@ ENTRY(am33xx_do_wfi)
 	 */
 	ldr	r1, kernel_flush
 	blx	r1
-	/*
-	 * The kernel doesn't interwork: v7_flush_dcache_all in particluar will
-	 * always return in Thumb state when CONFIG_THUMB2_KERNEL is enabled.
-	 * This sequence switches back to ARM.  Note that .align may insert a
-	 * nop: bx pc needs to be word-aligned in order to work.
-	 */
- THUMB(	.thumb		)
- THUMB(	.align		)
- THUMB(	bx	pc	)
- THUMB(	nop		)
-	.arm
 
 	ldr	r0, emif_addr_virt
 	/* Save EMIF configuration */
