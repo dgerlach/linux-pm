@@ -52,7 +52,7 @@ struct forced_standby_module {
 };
 
 int wkup_m3_copy_code(const u8 *data, size_t size);
-int wkup_m3_prepare();
+int wkup_m3_prepare(void);
 
 #endif
 

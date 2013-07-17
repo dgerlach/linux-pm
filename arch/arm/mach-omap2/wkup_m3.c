@@ -49,7 +49,7 @@ int wkup_m3_copy_code(const u8 *data, size_t size)
 	return 0;
 }
 
-extern int am33xx_txev_handler();
+extern int am33xx_txev_handler(void);
 /* have platforms do what they want in atomic context over here? */
 static irqreturn_t wkup_m3_txev_handler(int irq, void *unused)
 {
@@ -64,7 +64,7 @@ static irqreturn_t wkup_m3_txev_handler(int irq, void *unused)
 	return IRQ_HANDLED;
 }
 
-int wkup_m3_prepare()
+int wkup_m3_prepare(void)
 {
 	struct platform_device *pdev = to_platform_device(wkup_m3->dev);
 

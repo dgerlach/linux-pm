@@ -275,7 +275,7 @@ static struct notifier_block wkup_mbox_notifier = {
 };
 
 /* TODO: register this as a callback from M3 IRQ */
-int am33xx_txev_handler()
+int am33xx_txev_handler(void)
 {
 	int ret = 0;
 
