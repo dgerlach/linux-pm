@@ -137,13 +137,29 @@ wait_emif_disable:
 	bic	r2, r2, #0x03
 	str	r2, [r1]
 
-	dsb
-	dmb
+	/*
+	 * Execute an ISB instruction to ensure that all of the
+	 * CP15 register changes have been committed.
+	 */
 	isb
 
+	/*
+	 * Execute a barrier instruction to ensure that all cache,
+	 * TLB and branch predictor maintenance operations issued
+	 * have completed.
+	 */
+	dsb
+	dmb
+
+	/*
+	 * Execute a WFI instruction and wait until the
+	 * STANDBYWFI output is asserted to indicate that the
+	 * CPU is in idle and low power state. CPU can specualatively
+	 * prefetch the instructions so add NOPs after WFI. Thirteen
+	 * NOPs as per Cortex-A8 pipeline.
+	 */
 	wfi
 
-	/* NOPs to ensure the A8 pipeline is clean */
 	nop
 	nop
 	nop
