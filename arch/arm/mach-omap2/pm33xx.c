@@ -427,16 +427,27 @@ int __init am33xx_pm_init(void)
 	if (ret) {
 		pr_err("Could not ioremap EMIF\n");
 		goto err;
-	} else {
-		/* Determine Memory Type */
-		temp = readl(am33xx_emif_base + EMIF_SDRAM_CONFIG);
-		temp = (temp & SDRAM_TYPE_MASK) >> SDRAM_TYPE_SHIFT;
-		/* Parameters to pass to aseembly code */
-		susp_params.emif_addr_virt = am33xx_emif_base;
-		susp_params.dram_sync = am33xx_dram_sync;
-		susp_params.mem_type = temp;
-		am33xx_pm->ipc.param3 = temp;
 	}
+
+	/* Determine Memory Type */
+	temp = readl(am33xx_emif_base + EMIF_SDRAM_CONFIG);
+	temp = (temp & SDRAM_TYPE_MASK) >> SDRAM_TYPE_SHIFT;
+	/* Parameters to pass to assembly code */
+	susp_params.wfi_flags = 0;
+	susp_params.emif_addr_virt = am33xx_emif_base;
+	susp_params.dram_sync = am33xx_dram_sync;
+	am33xx_pm->ipc.param3 = temp;
+	switch (temp) {
+	case MEM_TYPE_DDR2:
+		susp_params.wfi_flags |= WFI_MEM_TYPE_DDR2;
+		break;
+	case MEM_TYPE_DDR3:
+		susp_params.wfi_flags |= WFI_MEM_TYPE_DDR3;
+		break;
+	}
+	susp_params.wfi_flags |= WFI_SELF_REFRESH;
+	susp_params.wfi_flags |= WFI_SAVE_EMIF;
+	susp_params.wfi_flags |= WFI_WAKE_M3;
 
 	np = of_find_compatible_node(NULL, NULL, "ti,am3353-wkup-m3");
 	if (np) {

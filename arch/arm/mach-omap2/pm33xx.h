@@ -37,7 +37,7 @@ struct am33xx_pm_context {
  */
 struct am33xx_suspend_params {
 	void __iomem *emif_addr_virt;
-	u32 mem_type;
+	u32 wfi_flags;
 	void __iomem *dram_sync;
 };
 
@@ -72,5 +72,12 @@ int wkup_m3_prepare(void);
 #define AM33XX_EMIF_BASE		0x4C000000
 
 #define MEM_TYPE_DDR2		2
+#define MEM_TYPE_DDR3		3
+
+#define WFI_MEM_TYPE_DDR2	(1 << 0)
+#define WFI_MEM_TYPE_DDR3	(1 << 1)
+#define WFI_SELF_REFRESH	(1 << 2)
+#define WFI_SAVE_EMIF		(1 << 3)
+#define WFI_WAKE_M3		(1 << 4)
 
 #endif
