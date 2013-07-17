@@ -130,7 +130,7 @@ err:
 
 static int wkup_m3_remove(struct platform_device *pdev)
 {
-
+	return 0;
 }
 
 static struct of_device_id wkup_m3_dt_ids[] = {
