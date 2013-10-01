@@ -258,6 +258,20 @@ struct edma {
 				void *data);
 		void *data;
 	} intr_data[EDMA_MAX_DMACH];
+
+	struct {
+		struct edmacc_param *prm_set;
+		unsigned int *ch_map;               /* 64 registers */
+		unsigned int *que_num;              /* 8 registers */
+		unsigned int sh_esr;
+		unsigned int sh_esrh;
+		unsigned int sh_eesr;
+		unsigned int sh_eesrh;
+		unsigned int sh_iesr;
+		unsigned int sh_iesrh;
+		unsigned int que_tc_map;
+		unsigned int que_pri;
+	} context;
 };
 
 static struct edma *edma_cc[EDMA_MAX_CC];
@@ -1671,6 +1685,16 @@ static int edma_probe(struct platform_device *pdev)
 			memcpy_toio(edmacc_regs_base[j] + PARM_OFFSET(i),
 					&dummy_paramset, PARM_SIZE);
 
+		/* resume context */
+		edma_cc[j]->context.prm_set =
+			kzalloc((sizeof(struct edmacc_param) *
+				 edma_cc[j]->num_slots), GFP_KERNEL);
+		edma_cc[j]->context.ch_map =
+			kzalloc((sizeof(unsigned int) *
+				 edma_cc[j]->num_channels), GFP_KERNEL);
+		edma_cc[j]->context.que_num =
+			kzalloc((sizeof(unsigned int) * 8), GFP_KERNEL);
+
 		/* Mark all channels as unused */
 		memset(edma_cc[j]->edma_unused, 0xff,
 			sizeof(edma_cc[j]->edma_unused));
@@ -1778,6 +1802,114 @@ static int edma_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static int edma_pm_suspend(struct device *dev)
+{
+	int i, j;
+
+	pm_runtime_get_sync(dev);
+
+	for (i = 0; i < arch_num_cc; i++) {
+		struct edma *ecc = edma_cc[i];
+
+		/* backup channel data */
+		for (j = 0; j < ecc->num_channels; j++)
+			ecc->context.ch_map[j] =
+				edma_read_array(i, EDMA_DCHMAP, j);
+
+		/* backup DMA Queue Number */
+		for (j = 0; j < 8; j++)
+			ecc->context.que_num[j] =
+				edma_read_array(i, EDMA_DMAQNUM, j);
+
+		/* backup DMA shadow Event Set data */
+		ecc->context.sh_esr = edma_shadow0_read_array(i, SH_ESR, 0);
+		ecc->context.sh_esrh = edma_shadow0_read_array(i, SH_ESR, 1);
+
+		/* backup DMA Shadow Event Enable Set data */
+		ecc->context.sh_eesr =
+			edma_shadow0_read_array(i, SH_EER, 0);
+		ecc->context.sh_eesrh =
+			edma_shadow0_read_array(i, SH_EER, 1);
+
+		/* backup DMA Shadow Interrupt Enable Set data */
+		ecc->context.sh_iesr =
+			edma_shadow0_read_array(i, SH_IER, 0);
+		ecc->context.sh_iesrh =
+			edma_shadow0_read_array(i, SH_IER, 1);
+
+		ecc->context.que_tc_map = edma_read(i, EDMA_QUETCMAP);
+
+		/* backup DMA Queue Priority data */
+		ecc->context.que_pri = edma_read(i, EDMA_QUEPRI);
+
+		/* backup paramset */
+		for (j = 0; j < ecc->num_slots; j++)
+			memcpy_fromio(&ecc->context.prm_set[j],
+				      edmacc_regs_base[i] + PARM_OFFSET(j),
+				      PARM_SIZE);
+	}
+
+	pm_runtime_put_sync(dev);
+
+	return 0;
+}
+
+static int edma_pm_resume(struct device *dev)
+{
+	int i, j;
+
+	pm_runtime_get_sync(dev);
+
+	for (i = 0; i < arch_num_cc; i++) {
+		struct edma *ecc = edma_cc[i];
+
+		/* restore channel data */
+		for (j = 0; j < ecc->num_channels; j++) {
+			edma_write_array(i, EDMA_DCHMAP, j,
+					 ecc->context.ch_map[j]);
+		}
+
+		/* restore DMA Queue Number */
+		for (j = 0; j < 8; j++) {
+			edma_write_array(i, EDMA_DMAQNUM, j,
+					 ecc->context.que_num[j]);
+		}
+
+		/* restore DMA shadow Event Set data */
+		edma_shadow0_write_array(i, SH_ESR, 0, ecc->context.sh_esr);
+		edma_shadow0_write_array(i, SH_ESR, 1, ecc->context.sh_esrh);
+
+		/* restore DMA Shadow Event Enable Set data */
+		edma_shadow0_write_array(i, SH_EESR, 0,
+					 ecc->context.sh_eesr);
+		edma_shadow0_write_array(i, SH_EESR, 1,
+					 ecc->context.sh_eesrh);
+
+		/* restore DMA Shadow Interrupt Enable Set data */
+		edma_shadow0_write_array(i, SH_IESR, 0,
+					 ecc->context.sh_iesr);
+		edma_shadow0_write_array(i, SH_IESR, 1,
+					 ecc->context.sh_iesrh);
+
+		edma_write(i, EDMA_QUETCMAP, ecc->context.que_tc_map);
+
+		/* restore DMA Queue Priority data */
+		edma_write(i, EDMA_QUEPRI, ecc->context.que_pri);
+
+		/* restore paramset */
+		for (j = 0; j < ecc->num_slots; j++) {
+			memcpy_toio(edmacc_regs_base[i] + PARM_OFFSET(j),
+				    &ecc->context.prm_set[j], PARM_SIZE);
+		}
+	}
+
+	pm_runtime_put_sync(dev);
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(edma_pm_ops, edma_pm_suspend, edma_pm_resume);
+
 static const struct of_device_id edma_of_ids[] = {
 	{ .compatible = "ti,edma3", },
 	{}
@@ -1786,6 +1918,7 @@ static const struct of_device_id edma_of_ids[] = {
 static struct platform_driver edma_driver = {
 	.driver = {
 		.name	= "edma",
+		.pm	= &edma_pm_ops,
 		.of_match_table = edma_of_ids,
 	},
 	.probe = edma_probe,
