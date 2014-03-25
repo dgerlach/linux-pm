@@ -16,16 +16,16 @@ an SoC. The sub-mailboxes are represented as child node of this parent node.
 
 Required properties:
 --------------------
-- compatible:		Should be "ti,am3353-wkup-m3-ipc" for AM33xx SoCs
-			Should be "ti,am4372-wkup-m3-ipc" for AM43xx SoCs
+- compatible:		Should be:
+				"ti,am3353-wkup-m3-ipc" for AM33xx SoCs
+				"ti,am4372-wkup-m3-ipc" for AM43xx SoCs
 - reg:			Contains the wkup_m3 register address ranges for
 			ipc-regs.
-- reg-names:		Name for ipc-regs given above
 - interrupts:		Contains the interrupt information for the wkup_m3
 			interrupt that signals the MPU.
-- ti,rproc:		Phandle to the wkup_m3 rproc node so the IPC driver
+- ti,rproc:		phandle to the wkup_m3 rproc node so the IPC driver
 			can boot it.
-- mboxes:		Phandles used by IPC framework to get correct mbox
+- mboxes:		phandles used by IPC framework to get correct mbox
 			channel for communication. Must point to appropriate
 			mbox_wkupm3 child node.
 
@@ -35,7 +35,6 @@ Example:
 wkup_m3_ipc: wkup_m3_ipc@44e11324 {
 	compatible = "ti,am3353-wkup-m3-ipc";
 	reg = <0x44e11324 0x0024>;
-	reg-names = "ipc_regs";
 	interrupts = <78>;
 	ti,rproc = <&wkup_m3>;
 	mboxes = <&mailbox &mbox_wkupm3>;
