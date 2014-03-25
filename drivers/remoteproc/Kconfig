@@ -41,6 +41,18 @@ config STE_MODEM_RPROC
 	  This can be either built-in or a loadable module.
 	  If unsure say N.
 
+config WKUP_M3_RPROC
+	bool "AM33xx wkup-m3 remoteproc support"
+	depends on SOC_AM33XX
+	select REMOTEPROC
+	help
+	  Say y here to support AM33xx wkup-m3.
+
+	  Required for Suspend-to-ram and CPUIdle on AM33xx. Allows for
+	  loading of firmware of CM3 PM coprocessor that is present
+	  on AM33xx family of SoCs
+	  If unsure say N.
+
 config DA8XX_REMOTEPROC
 	tristate "DA8xx/OMAP-L13x remoteproc support"
 	depends on ARCH_DAVINCI_DA8XX
