@@ -77,9 +77,22 @@
 	 */
 	soc {
 		compatible = "ti,omap-infra";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0     0x44d00000 0x4000>,
+			 <0x80000 0x44d80000 0x2000>;
+
 		mpu {
 			compatible = "ti,omap3-mpu";
 			ti,hwmods = "mpu";
+		};
+
+		wkup_m3: wkup_m3@44d00000 {
+			compatible = "ti,am3353-wkup-m3";
+			reg = <0x0     0x4000>,	/* M3 UMEM */
+			      <0x80000 0x2000>;	/* M3 DMEM */
+			ti,hwmods = "wkup_m3";
+			ti,pm-firmware = "am335x-pm-firmware.elf";
 		};
 	};
 
@@ -753,14 +766,6 @@
 		ocmcram: ocmcram@40300000 {
 			compatible = "mmio-sram";
 			reg = <0x40300000 0x10000>; /* 64k */
-		};
-
-		wkup_m3: wkup_m3@44d00000 {
-			compatible = "ti,am3353-wkup-m3";
-			reg = <0x44d00000 0x4000	/* M3 UMEM */
-			       0x44d80000 0x2000>;	/* M3 DMEM */
-			ti,hwmods = "wkup_m3";
-			ti,no-reset-on-init;
 		};
 
 		elm: elm@48080000 {
