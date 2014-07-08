@@ -848,6 +848,15 @@
 			reg = <0x48310000 0x2000>;
 			interrupts = <111>;
 		};
+
+		wkup_m3_ipc: wkup_m3_ipc@44e11324 {
+			compatible = "ti,am3353-wkup-m3-ipc";
+			reg = <0x44e11324 0x0024>;
+			reg-names = "ipc_regs";
+			interrupts = <78>;
+			ti,rproc = <&wkup_m3>;
+			mboxes = <&mailbox &mbox_wkupm3>;
+		};
 	};
 };
 
