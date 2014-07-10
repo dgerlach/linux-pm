@@ -1,0 +1,32 @@
+Wakeup M3 Remote Proc Driver
+=====================
+
+TI AMx3 family of devices use a Cortex M3 co-processor to help with various
+low power tasks that cannot be controlled from the MPU. The CM3 requires
+a firmware binary to accomplish this. The wkup_m3 remoteproc driver handles
+the loading of the firmware and booting of the CM3.
+
+Wkup M3 Device Node:
+====================
+A wkup_m3 device node is used to represent a wakeup M3 IP instance within
+a SoC.
+
+Required properties:
+--------------------
+- compatible:		Should be "ti,am3353-wkup-m3" for AM33xx SoCs
+- reg:			Contains the wkup_m3 register address ranges for
+			umem and dmem.
+- ti,hwmods:		Name of the hwmod associated with the mailbox
+- ti,no-reset-on-init:	Reset is handled after fw has been loaded, not at
+			init of hwmod.
+
+Example:
+--------
+/* AM33xx */
+wkup_m3: wkup_m3@44d00000 {
+	compatible = "ti,am3353-wkup-m3";
+	reg = <0x44d00000 0x4000	/* M3 UMEM */
+	       0x44d80000 0x2000>;	/* M3 DMEM */
+	ti,hwmods = "wkup_m3";
+	ti,no-reset-on-init;
+};
