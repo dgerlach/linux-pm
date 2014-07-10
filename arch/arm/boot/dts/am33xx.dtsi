@@ -80,6 +80,7 @@
 		mpu {
 			compatible = "ti,omap3-mpu";
 			ti,hwmods = "mpu";
+			sram = <&ocmcram>;
 		};
 	};
 
@@ -744,6 +745,7 @@
 		ocmcram: ocmcram@40300000 {
 			compatible = "mmio-sram";
 			reg = <0x40300000 0x10000>; /* 64k */
+			map-exec;
 		};
 
 		wkup_m3: wkup_m3@44d00000 {
