@@ -520,6 +520,9 @@ struct omap_hwmod_omap4_prcm {
  * HWMOD_KEEP_ACTIVE: Certain hwmods should never be idled by the kernel even
  *		      if they have valid idle states like the EMIF or L3 on
  *		      AM437x, which are controlled from the wkup_m3.
+ * HWMOD_NO_INIT: Do not initialize the hwmod. Useful for when certain
+ *     platforms disable the IP through hardware configuration, like the
+ *     RTC on the AM437x EPOS EVM.
  */
 #define HWMOD_SWSUP_SIDLE			(1 << 0)
 #define HWMOD_SWSUP_MSTANDBY			(1 << 1)
@@ -536,6 +539,7 @@ struct omap_hwmod_omap4_prcm {
 #define HWMOD_SWSUP_SIDLE_ACT			(1 << 12)
 #define HWMOD_RECONFIG_IO_CHAIN			(1 << 13)
 #define HWMOD_KEEP_ACTIVE			(1 << 14)
+#define HWMOD_NO_INIT				(1 << 15)
 
 /*
  * omap_hwmod._int_flags definitions
