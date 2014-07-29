@@ -14,6 +14,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/of.h>
 #include <linux/platform_data/gpio-omap.h>
 #include <linux/platform_data/spi-omap2-mcspi.h>
 #include "omap_hwmod.h"
@@ -947,6 +948,7 @@ static struct omap_hwmod_ocp_if *am43xx_hwmod_ocp_ifs[] __initdata = {
 	&am43xx_l4_ls__dss_dispc,
 	&am43xx_l4_ls__dss_rfbi,
 	&am43xx_l4_ls__hdq1w,
+	&am33xx_l4_wkup__rtc,
 	NULL,
 };
 
@@ -954,5 +956,6 @@ int __init am43xx_hwmod_init(void)
 {
 	omap_hwmod_am43xx_reg();
 	omap_hwmod_init();
+
 	return omap_hwmod_register_links(am43xx_hwmod_ocp_ifs);
 }
