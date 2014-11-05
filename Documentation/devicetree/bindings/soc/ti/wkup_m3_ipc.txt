@@ -1,0 +1,41 @@
+Wakeup M3 IPC Driver
+=====================
+
+TI AMx3 family of devices use a Cortex M3 co-processor to help with various
+low power tasks that cannot be controlled from the MPU like suspend/resume
+and certain deep C-states for CPU Idle. Once the wkup_m3_ipc driver uses the
+wkup_m3_rproc driver to boot the wkup_m3, it handles communication with the
+CM3 using IPC registers present in the SoC's control module and a mailbox.
+The wkup_m3_ipc exposes an API to allow the SoC PM code to execute specific
+PM tasks.
+
+Wkup M3 Device Node:
+====================
+A wkup_m3_ipc device node is used to represent a wakeup M3 IP instance within
+an SoC. The sub-mailboxes are represented as child node of this parent node.
+
+Required properties:
+--------------------
+- compatible:		Should be "ti,am3353-wkup-m3-ipc" for AM33xx SoCs
+- reg:			Contains the wkup_m3 register address ranges for
+			ipc-regs.
+- reg-names:		Name for ipc-regs given above
+- interrupts:		Contains the interrupt information for the wkup_m3
+			interrupt that signals the MPU.
+- ti,rproc:		Phandle to the wkup_m3 rproc node so the IPC driver
+			can boot it.
+- mboxes:		Phandles used by IPC framework to get correct mbox
+			channel for communication. Must point to appropriate
+			mbox_wkupm3 child node.
+
+Example:
+--------
+/* AM33xx */
+wkup_m3_ipc: wkup_m3_ipc@44e11324 {
+	compatible = "ti,am3353-wkup-m3-ipc";
+	reg = <0x44e11324 0x0024>;
+	reg-names = "ipc_regs";
+	interrupts = <78>;
+	ti,rproc = <&wkup_m3>;
+	mboxes = <&mailbox &mbox_wkupm3>;
+};
