@@ -13,3 +13,6 @@ obj-$(CONFIG_FSL_IFC)		+= fsl_ifc.o
 obj-$(CONFIG_MVEBU_DEVBUS)	+= mvebu-devbus.o
 obj-$(CONFIG_TEGRA20_MC)	+= tegra20-mc.o
 obj-$(CONFIG_TEGRA30_MC)	+= tegra30-mc.o
+obj-$(CONFIG_TI_EMIF_SRAM)	+= ti-emif-sram.o ti-emif-sram-pm.o
+
+AFLAGS_ti-emif-sram-pm.o	:=-Wa,-march=armv7-a
