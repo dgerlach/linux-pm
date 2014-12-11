@@ -622,6 +622,7 @@ void __init am43xx_init_early(void)
 void __init am43xx_init_late(void)
 {
 	omap_common_late_init();
+	am43xx_pm_init();
 }
 #endif
 
