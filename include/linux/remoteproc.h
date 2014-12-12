@@ -522,6 +522,7 @@ struct rproc_vdev {
 	u32 rsc_offset;
 };
 
+struct rproc *rproc_get_by_phandle(uint32_t phandle);
 struct rproc *rproc_alloc(struct device *dev, const char *name,
 				const struct rproc_ops *ops,
 				const char *firmware, int len);
