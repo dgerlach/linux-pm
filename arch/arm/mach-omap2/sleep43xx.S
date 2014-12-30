@@ -16,13 +16,11 @@
  */
 
 #include <linux/linkage.h>
-#include <linux/ti_emif.h>
 #include <asm/memory.h>
 #include <asm/assembler.h>
 
 #include "iomap.h"
 #include "cm33xx.h"
-#include "pm33xx.h"
 #include "prm33xx.h"
 #include "prcm43xx.h"
 
@@ -50,6 +48,23 @@
 #define AM43XX_CM_CLKSTCTRL_CLKTRCTRL_SW_SLEEP		0x1
 #define AM43XX_CM_CLKSTCTRL_CLKTRCTRL_HW_AUTO		0x3
 
+
+#define AM43XX_CM_BASE                 0x44DF0000
+
+#define AM43XX_CTRL_CKE_OVERRIDE       0x44E1131C
+
+#define AM43XX_CM_REGADDR(inst, reg)                           \
+       AM33XX_L4_WK_IO_ADDRESS(AM43XX_CM_BASE + (inst) + (reg))
+
+#define AM43XX_PM_MPU_PWRSTCTRL AM43XX_CM_REGADDR(0x0300, 0x00)
+#define AM43XX_CM_MPU_CLKSTCTRL AM43XX_CM_REGADDR(0x8300, 0x00)
+#define AM43XX_CM_MPU_MPU_CLKCTRL AM43XX_CM_REGADDR(0x8300, 0x20)
+#define AM43XX_CM_PER_EMIF_CLKCTRL  AM43XX_CM_REGADDR(0x8800, 0x0720)
+
+#define AM43XX_CM_PER_EMIF_CLKCTRL_OFFSET 0x0720
+#define AM43XX_PRM_EMIF_CTRL_OFFSET    0x30
+
+
 	.text
 	.align 3
 
@@ -71,66 +86,6 @@
 
 ENTRY(am43xx_do_wfi)
 	stmfd	sp!, {r4 - r11, lr}	@ save registers on stack
-
-	ldm	r0, {r1-r5}		@ gather values passed
-
-	/* Save the values passed */
-	str	r1, emif_addr_virt
-	str	r2, mem_type
-	str	r3, dram_sync_word
-	str	r4, l2_base_virt
-	str	r5, cke_override_virt
-
-	ldr	r0, emif_addr_virt
-	/* Save EMIF configuration */
-	ldr	r1, [r0, #EMIF_SDRAM_CONFIG]
-	str	r1, emif_sdcfg_val
-	ldr	r1, [r0, #EMIF_SDRAM_REFRESH_CONTROL]
-	str	r1, emif_ref_ctrl_val
-	ldr	r1, [r0, #EMIF_SDRAM_REFRESH_CTRL_SHDW]
-	str	r1, emif_ref_ctrl_val_shdw
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_1]
-	str	r1, emif_timing1_val
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_1_SHDW]
-	str	r1, emif_timing1_val_shdw
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_2]
-	str	r1, emif_timing2_val
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_2_SHDW]
-	str	r1, emif_timing2_val_shdw
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_3]
-	str	r1, emif_timing3_val
-	ldr	r1, [r0, #EMIF_SDRAM_TIMING_3_SHDW]
-	str	r1, emif_timing3_val_shdw
-	ldr	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-	str	r1, emif_pmcr_val
-	ldr	r1, [r0, #EMIF_POWER_MANAGEMENT_CTRL_SHDW]
-	str	r1, emif_pmcr_shdw_val
-	ldr	r1, [r0, #EMIF_SDRAM_OUTPUT_IMPEDANCE_CALIBRATION_CONFIG]
-	str	r1, emif_zqcfg_val
-	ldr	r1, [r0, #EMIF_DDR_PHY_CTRL_1]
-	str	r1, emif_ddr_phy_ctlr_1
-	ldr	r1, [r0, #EMIF_LPDDR2_NVM_TIMING]
-	str	r1, emif_lpddr2_nvm_tim
-	ldr	r1, [r0, #EMIF_LPDDR2_NVM_TIMING_SHDW]
-	str	r1, emif_lpddr2_nvm_tim_shdw
-	ldr	r1, [r0, #EMIF_OCP_CONFIG]
-	str	r1, emif_ocp_config_val
-	ldr	r1, [r0, #EMIF_DLL_CALIB_CTRL]
-	str	r1, emif_dll_calib_ctrl_val
-	ldr	r1, [r0, #EMIF_DLL_CALIB_CTRL_SHDW]
-	str	r1, emif_dll_calib_ctrl_val_shdw
-
-	/* Loop and save entire block of emif phy regs */
-	mov	r2, #0x0
-	adrl	r4, emif_ext_phy_ctrl_vals
-	add	r3, r0, #EMIF_EXT_PHY_CTRL_1
-ddr_phy_ctrl_save:
-
-	ldr	r1, [r3, r2]
-	str	r1, [r4, r2]
-	add	r2,r2,#0x4
-	cmp	r2, #AM43XX_EMIF_PHY_CTRL_REG_COUNT
-	bne	ddr_phy_ctrl_save
 
 	/*
 	 * Flush all data from the L1 and L2 data cache before disabling
@@ -183,7 +138,7 @@ ddr_phy_ctrl_save:
 	mov	r2, r0
 	ldr	r0, [r2, #L2X0_AUX_CTRL]
 	str	r0, l2_aux_ctrl_val
-	ldr	r0, [r2, #L2X0_PREFETCH_CTRL]
+	ldr	r0, [r2, #L310_PREFETCH_CTRL]
 	str	r0, l2_prefetch_ctrl_val
 
 	ldr	r0, l2_val
@@ -210,21 +165,6 @@ sync:
 	ands	r0, r0, #0x1
 	bne	sync
 #endif
-
-	ldr	r0, emif_addr_virt
-	/* Put SDRAM in self-refresh */
-	ldr	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-	bic	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE_MASK
-	orr	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-
-	ldr	r1, dram_sync_word	@ a dummy access to DDR as per spec
-	ldr	r2, [r1, #0]
-
-	mov	r1, #EMIF_POWER_MGMT_DELAY_PERIOD	@ Wait for system
-wait_self_refresh:					@ to enter SR
-	subs	r1, r1, #1
-	bne	wait_self_refresh
 
 	/* Disable EMIF */
 	ldr	r1, am43xx_virt_emif_clkctrl
@@ -314,23 +254,6 @@ wait_emif_enable:
 	cmp	r2, r3
 	bne	wait_emif_enable
 
-	/* Disable EMIF self-refresh */
-	ldr	r0, emif_addr_virt
-	ldr	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-	bic	r1, r1, #LP_MODE_MASK
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CTRL_SHDW]
-
-	/*
-	 * A write to SDRAM CONFIG register triggers
-	 * an init sequence and hence it must be done
-	 * at the end for DDR2
-	 */
-	ldr r0, emif_addr_virt
-	add r0, r0, #EMIF_SDRAM_CONFIG
-	ldr r4, emif_sdcfg_val
-	str r4, [r0]
-
 	/*
 	 * Set SCTLR.C bit to allow data cache allocation
 	 */
@@ -370,86 +293,14 @@ wait_emif_enable1:
 	cmp	r2, r3
 	bne	wait_emif_enable1
 
-	/* Config EMIF Timings */
-	ldr	r0, emif_phys_addr
-	ldr	r1, emif_ref_ctrl_val
-	str	r1, [r0, #EMIF_SDRAM_REFRESH_CONTROL]
-	ldr	r1, emif_ref_ctrl_val_shdw
-	str	r1, [r0, #EMIF_SDRAM_REFRESH_CTRL_SHDW]
-	ldr	r1, emif_timing1_val
-	str	r1, [r0, #EMIF_SDRAM_TIMING_1]
-	ldr	r1, emif_timing1_val_shdw
-	str	r1, [r0, #EMIF_SDRAM_TIMING_1_SHDW]
-	ldr	r1, emif_timing2_val
-	str	r1, [r0, #EMIF_SDRAM_TIMING_2]
-	ldr	r1, emif_timing2_val_shdw
-	str	r1, [r0, #EMIF_SDRAM_TIMING_2_SHDW]
-	ldr	r1, emif_timing3_val
-	str	r1, [r0, #EMIF_SDRAM_TIMING_3]
-	ldr	r1, emif_timing3_val_shdw
-	str	r1, [r0, #EMIF_SDRAM_TIMING_3_SHDW]
-	ldr	r1, emif_ddr_phy_ctlr_1
-	str	r1, [r0, #EMIF_DDR_PHY_CTRL_1]
-	str	r1, [r0, #EMIF_DDR_PHY_CTRL_1_SHDW]
-	ldr	r1, emif_pmcr_val
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-	ldr	r1, emif_pmcr_shdw_val
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CTRL_SHDW]
-	ldr	r1, emif_lpddr2_nvm_tim
-	str	r1, [r0, #EMIF_LPDDR2_NVM_TIMING]
-	ldr	r1, emif_lpddr2_nvm_tim_shdw
-	str	r1, [r0, #EMIF_LPDDR2_NVM_TIMING_SHDW]
-	ldr	r1, emif_ocp_config_val
-	str	r1, [r0, #EMIF_OCP_CONFIG]
-	ldr	r1, emif_dll_calib_ctrl_val
-	str	r1, [r0, #EMIF_DLL_CALIB_CTRL]
-	ldr	r1, emif_dll_calib_ctrl_val_shdw
-	str	r1, [r0, #EMIF_DLL_CALIB_CTRL_SHDW]
-	ldr	r1, emif_zqcfg_val
-	str	r1, [r0, #EMIF_SDRAM_OUTPUT_IMPEDANCE_CALIBRATION_CONFIG]
-
-	/* Loop and restore entire block of emif phy regs */
-	mov	r2, #0x0
-	adrl	r3, emif_ext_phy_ctrl_vals
-	add	r4, r0, #EMIF_EXT_PHY_CTRL_1
-ddr_phy_ctrl_restore:
-	ldr	r1, [r3, r2]
-	str	r1, [r4, r2]
-	add	r2, r2, #0x4
-	cmp	r2, #AM43XX_EMIF_PHY_CTRL_REG_COUNT
-	bne	ddr_phy_ctrl_restore
+/*restore emif timing */
 
 	/*disable CKE override for both CKE0 and CKE1*/
 	ldr    r2, cke_override_phys
 	mov    r1, #3
 	str    r1, [r2]
 
-	/*
-	 * Toggle EMIF to exit refresh mode:
-	 * if EMIF lost context, PWR_MGT_CTRL is currently 0, writing disable
-	 *   (0x0), wont do diddly squat! so do a toggle from SR(0x2) to disable
-	 *   (0x0) here.
-	 * *If* EMIF did not loose context, nothing broken as we write the same
-	 *   value(0x2) to reg before we write a disable (0x0).
-	 */
-	ldr	r1, emif_pmcr_val
-	bic	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE_MASK
-	orr	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-
-	ldr	r2, am43xx_phys_emif_poweroff
-	mov	r1, #AM43XX_EMIF_POWEROFF_DISABLE
-	str	r1, [r2, #0x0]
-
-	ldr	r1, emif_pmcr_val
-	bic	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE_MASK
-	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
-
-	/* EMIF needs some time before read/write possible */
-	mov	r1, #EMIF_POWER_MGMT_DELAY_PERIOD
-wait_resume:
-	subs	r1, r1, #1
-	bne	wait_resume
+	/* exit sr */
 
 #ifdef CONFIG_CACHE_L2X0
 	ldr	r2, l2_cache_base
@@ -519,8 +370,6 @@ kernel_flush:
 	.word   v7_flush_dcache_all
 ddr_start:
 	.word	PAGE_OFFSET
-emif_phys_addr:
-	.word	AM33XX_EMIF_BASE
 
 cke_override_virt:
 	.word	0xDEADBEEF
@@ -545,6 +394,8 @@ module_disabled_val:
 	.word	0x30000
 
 /* L2 cache related defines for AM437x */
+l2_base_virt:
+	.word	0xDEADBEEF
 l2_aux_ctrl_val:
 	.word	0xDEADBEEF
 l2_prefetch_ctrl_val:
@@ -559,58 +410,6 @@ l2_smc2:
 	.word	OMAP4_MON_L2X0_AUXCTRL_INDEX
 l2_smc3:
 	.word	OMAP4_MON_L2X0_CTRL_INDEX
-
-/* DDR related defines */
-dram_sync_word:
-	.word	0xDEADBEEF
-mem_type:
-	.word	0xDEADBEEF
-l2_base_virt:
-	.word	0xDEADBEEF
-emif_addr_virt:
-	.word	0xDEADBEEF
-emif_sdcfg_val:
-	.word	0xDEADBEEF
-emif_timing1_val:
-	.word	0xDEADBEEF
-emif_timing1_val_shdw:
-	.word	0xDEADBEEF
-emif_timing2_val:
-	.word	0xDEADBEEF
-emif_timing2_val_shdw:
-	.word	0xDEADBEEF
-emif_timing3_val:
-	.word	0xDEADBEEF
-emif_timing3_val_shdw:
-	.word	0xDEADBEEF
-emif_rd_lat_val:
-	.word	0xDEADBEEF
-emif_ref_ctrl_val:
-	.word	0xDEADBEEF
-emif_ref_ctrl_val_shdw:
-	.word	0xDEADBEEF
-emif_zqcfg_val:
-	.word	0xDEADBEEF
-emif_ocp_config_val:
-	.word	0xDEADBEEF
-emif_ocp_config_val_shdw:
-	.word	0xDEADBEEF
-emif_pmcr_val:
-	.word	0xDEADBEEF
-emif_pmcr_shdw_val:
-	.word	0xDEADBEEF
-emif_lpddr2_nvm_tim:
-	.word	0xDEADBEEF
-emif_lpddr2_nvm_tim_shdw:
-	.word	0xDEADBEEF
-emif_dll_calib_ctrl_val:
-	.word	0xDEADBEEF
-emif_dll_calib_ctrl_val_shdw:
-	.word	0xDEADBEEF
-emif_ddr_phy_ctlr_1:
-	.word	0xDEADBEEF
-emif_ext_phy_ctrl_vals:
-	.space	0x120
 
 	.align 3
 
