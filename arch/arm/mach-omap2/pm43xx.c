@@ -163,7 +163,7 @@ static int am43xx_push_sram_idle(void)
 		return -ENODEV;
 	}
 
-	ocmcram_location = gen_pool_alloc(sram_pool, am33xx_do_wfi_sz);
+	ocmcram_location = gen_pool_alloc(sram_pool, am43xx_do_wfi_sz);
 	if (!ocmcram_location)
 		return -EINVAL;
 
@@ -202,7 +202,7 @@ int __init am43xx_pm_init(void)
 	else
 		pr_warn("PM: Failed to get cefuse_pwrdm\n");
 
-	ret = am33xx_push_sram_idle();
+	ret = am43xx_push_sram_idle();
 	if (ret)
 		return ret;
 
