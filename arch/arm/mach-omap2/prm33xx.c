@@ -64,7 +64,7 @@ static u32 am33xx_prm_rmw_reg_bits(u32 mask, u32 bits, s16 inst, s16 idx)
  * 0 if the (sub)module hardreset line is not currently asserted, or
  * -EINVAL upon parameter error.
  */
-static int am33xx_prm_is_hardreset_asserted(u8 shift, u8 part, s16 inst,
+int am33xx_prm_is_hardreset_asserted(u8 shift, u8 part, s16 inst,
 					    u16 rstctrl_offs)
 {
 	u32 v;
@@ -90,7 +90,7 @@ static int am33xx_prm_is_hardreset_asserted(u8 shift, u8 part, s16 inst,
  * place the submodule into reset.  Returns 0 upon success or -EINVAL
  * upon an argument error.
  */
-static int am33xx_prm_assert_hardreset(u8 shift, u8 part, s16 inst,
+int am33xx_prm_assert_hardreset(u8 shift, u8 part, s16 inst,
 				       u16 rstctrl_offs)
 {
 	u32 mask = 1 << shift;
@@ -119,7 +119,7 @@ static int am33xx_prm_assert_hardreset(u8 shift, u8 part, s16 inst,
  * -EINVAL upon an argument error, -EEXIST if the submodule was already out
  * of reset, or -EBUSY if the submodule did not exit reset promptly.
  */
-static int am33xx_prm_deassert_hardreset(u8 shift, u8 st_shift, u8 part,
+int am33xx_prm_deassert_hardreset(u8 shift, u8 st_shift, u8 part,
 					 s16 inst, u16 rstctrl_offs,
 					 u16 rstst_offs)
 {

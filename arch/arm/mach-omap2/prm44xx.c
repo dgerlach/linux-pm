@@ -24,6 +24,7 @@
 #include "iomap.h"
 #include "common.h"
 #include "vp.h"
+#include "prm33xx.h"
 #include "prm44xx.h"
 #include "prm-regbits-44xx.h"
 #include "prcm44xx.h"
@@ -703,6 +704,17 @@ static struct prm_ll_data omap44xx_prm_ll_data = {
 	.vp_clear_txdone	= omap4_prm_vp_clear_txdone,
 };
 
+static struct prm_ll_data am43xx_prm_ll_data = {
+	.read_reset_sources = &omap44xx_prm_read_reset_sources,
+	.was_any_context_lost_old = &omap44xx_prm_was_any_context_lost_old,
+	.clear_context_loss_flags_old = &omap44xx_prm_clear_context_loss_flags_old,
+	.late_init = &omap44xx_prm_late_init,
+	.assert_hardreset	= am33xx_prm_assert_hardreset,
+	.deassert_hardreset	= am33xx_prm_deassert_hardreset,
+	.is_hardreset_asserted	= am33xx_prm_is_hardreset_asserted,
+	.reset_system		= omap4_prminst_global_warm_sw_reset,
+};
+
 static const struct omap_prcm_init_data *prm_init_data;
 
 int __init omap44xx_prm_init(const struct omap_prcm_init_data *data)
@@ -717,7 +729,8 @@ int __init omap44xx_prm_init(const struct omap_prcm_init_data *data)
 	if (data->flags & PRM_HAS_VOLTAGE)
 		prm_features |= PRM_HAS_VOLTAGE;
 
-	omap4_prminst_set_prm_dev_inst(data->device_inst_offset);
+	if (soc_is_am43xx())
+		return prm_register(&am43xx_prm_ll_data);
 
 	return prm_register(&omap44xx_prm_ll_data);
 }
