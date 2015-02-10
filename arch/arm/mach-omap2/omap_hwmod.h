@@ -517,6 +517,9 @@ struct omap_hwmod_omap4_prcm {
  * HWMOD_RECONFIG_IO_CHAIN: omap_hwmod code needs to reconfigure wake-up 
  *     events by calling _reconfigure_io_chain() when a device is enabled
  *     or idled.
+ * HWMOD_KEEP_ACTIVE: Certain hwmods should never be idled by the kernel even
+ *		      if they have valid idle states like the EMIF or L3 on
+ *		      AM437x, which are controlled from the wkup_m3.
  */
 #define HWMOD_SWSUP_SIDLE			(1 << 0)
 #define HWMOD_SWSUP_MSTANDBY			(1 << 1)
@@ -532,6 +535,7 @@ struct omap_hwmod_omap4_prcm {
 #define HWMOD_FORCE_MSTANDBY			(1 << 11)
 #define HWMOD_SWSUP_SIDLE_ACT			(1 << 12)
 #define HWMOD_RECONFIG_IO_CHAIN			(1 << 13)
+#define HWMOD_KEEP_ACTIVE			(1 << 14)
 
 /*
  * omap_hwmod._int_flags definitions

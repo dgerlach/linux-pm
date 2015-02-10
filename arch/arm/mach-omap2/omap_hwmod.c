@@ -2062,6 +2062,9 @@ static int _enable(struct omap_hwmod *oh)
 
 	pr_debug("omap_hwmod: %s: enabling\n", oh->name);
 
+	if (oh->_state == _HWMOD_STATE_ENABLED && oh->flags & HWMOD_KEEP_ACTIVE)
+		return 0;
+
 	/*
 	 * hwmods with HWMOD_INIT_NO_IDLE flag set are left in enabled
 	 * state at init.  Now that someone is really trying to enable
@@ -2181,6 +2184,11 @@ static int _enable(struct omap_hwmod *oh)
 static int _idle(struct omap_hwmod *oh)
 {
 	pr_debug("omap_hwmod: %s: idling\n", oh->name);
+
+	if (oh->flags & HWMOD_KEEP_ACTIVE) {
+		pr_debug("omap_hwmod: %s: kept active\n", oh->name);
+		return 0;
+	}
 
 	if (oh->_state != _HWMOD_STATE_ENABLED) {
 		WARN(1, "omap_hwmod: %s: idle state can only be entered from enabled state\n",
