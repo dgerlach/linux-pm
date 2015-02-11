@@ -150,8 +150,10 @@
 		};
 
 		emif: emif@4c000000 {
+			compatible = "ti,am3352-emif";
 			reg = <0x4c000000 0x1000000>;
 			ti,hwmods = "emif";
+			sram = <&ocmcram>;
 		};
 
 		edma: edma@49000000 {
