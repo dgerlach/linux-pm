@@ -22,6 +22,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 
 #include <asm/fncpy.h>
 
@@ -154,6 +155,15 @@ static int ti_emif_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
+
+	pm_runtime_enable(dev);
+	ret = pm_runtime_get_sync(dev);
+
+	if (IS_ERR_VALUE(ret)) {
+		dev_err(dev, "pm_runtime_get_sync() failed\n");
+		pm_runtime_put_sync(dev);
+		return ret;
+	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	ti_emif_base_addr_virt = devm_ioremap_resource(dev, res);
