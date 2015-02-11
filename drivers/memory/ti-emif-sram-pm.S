@@ -28,6 +28,10 @@
 #define EMIF_SDCFG_TYPE_DDR2				0x2 << SDRAM_TYPE_SHIFT
 #define EMIF_STATUS_READY				0x4
 
+#define AM43XX_EMIF_PHY_CTRL_REG_COUNT                  0x120
+
+#define EMIF_AM437X_REGISTERS				0x1
+
 	.text
 	.align 3
 
@@ -42,6 +46,8 @@ ENTRY(ti_emif_sram)
  */
 ENTRY(ti_emif_save_context)
 	stmfd   sp!, {r4 - r11, lr}     @ save registers on stack
+
+	mov	r2, r0
 
 	ldr	r0, ti_emif_base_addr_virt
 
@@ -63,8 +69,46 @@ ENTRY(ti_emif_save_context)
 	ldr	r1, [r0, #EMIF_SDRAM_OUTPUT_IMPEDANCE_CALIBRATION_CONFIG]
 	str	r1, emif_zqcfg_val
 	ldr	r1, [r0, #EMIF_DDR_PHY_CTRL_1]
-	str	r1, emif_rd_lat_val
+	str	r1, emif_ddr_phy_ctlr_1
 
+	cmp	r2, #EMIF_AM437X_REGISTERS
+	bne	emif_skip_save_extra_regs
+
+	ldr	r1, [r0, #EMIF_READ_WRITE_LEVELING_RAMP_CONTROL]
+	str	r1, emif_rd_wr_level_ramp_ctrl
+	ldr	r1, [r0, #EMIF_READ_WRITE_EXECUTION_THRESHOLD]
+	str	r1, emif_rd_wr_exec_thresh
+	ldr	r1, [r0, #EMIF_COS_CONFIG]
+	str	r1, emif_cos_config
+	ldr	r1, [r0, #EMIF_PRIORITY_TO_CLASS_OF_SERVICE_MAPPING]
+	str	r1, emif_priority_to_cos_mapping
+	ldr	r1, [r0, #EMIF_CONNECTION_ID_TO_CLASS_OF_SERVICE_1_MAPPING]
+	str	r1, emif_connect_id_serv_1_map
+	ldr	r1, [r0, #EMIF_CONNECTION_ID_TO_CLASS_OF_SERVICE_2_MAPPING]
+	str	r1, emif_connect_id_serv_2_map
+	ldr	r1, [r0, #EMIF_LPDDR2_NVM_TIMING]
+	str	r1, emif_lpddr2_nvm_tim
+	ldr	r1, [r0, #EMIF_LPDDR2_NVM_TIMING_SHDW]
+	str	r1, emif_lpddr2_nvm_tim_shdw
+	ldr	r1, [r0, #EMIF_OCP_CONFIG]
+	str	r1, emif_ocp_config_val
+	ldr	r1, [r0, #EMIF_DLL_CALIB_CTRL]
+	str	r1, emif_dll_calib_ctrl_val
+	ldr	r1, [r0, #EMIF_DLL_CALIB_CTRL_SHDW]
+	str	r1, emif_dll_calib_ctrl_val_shdw
+
+	/* Loop and save entire block of emif phy regs */
+	mov	r2, #0x0
+	adrl	r4, emif_ext_phy_ctrl_vals
+	add	r3, r0, #EMIF_EXT_PHY_CTRL_1
+ddr_phy_ctrl_save:
+	ldr	r1, [r3, r2]
+	str	r1, [r4, r2]
+	add	r2,r2,#0x4
+	cmp	r2, #AM43XX_EMIF_PHY_CTRL_REG_COUNT
+	bne	ddr_phy_ctrl_save
+
+emif_skip_save_extra_regs:
 	ldmfd	sp!, {r4 - r11, pc}	@ restore regs and return
 ENDPROC(ti_emif_save_context)
 
@@ -78,10 +122,12 @@ ENDPROC(ti_emif_save_context)
 ENTRY(ti_emif_restore_context)
 	stmfd   sp!, {r4 - r11, lr}     @ save registers on stack
 
+	mov	r2, r0
+
 	ldr     r0, ti_emif_base_addr_phys
 
 	/* Config EMIF Timings */
-	ldr	r1, emif_rd_lat_val
+	ldr	r1, emif_ddr_phy_ctlr_1
 	str	r1, [r0, #EMIF_DDR_PHY_CTRL_1]
 	str	r1, [r0, #EMIF_DDR_PHY_CTRL_1_SHDW]
 	ldr	r1, emif_timing1_val
@@ -96,9 +142,51 @@ ENTRY(ti_emif_restore_context)
 	ldr	r1, emif_ref_ctrl_val
 	str	r1, [r0, #EMIF_SDRAM_REFRESH_CONTROL]
 	str	r1, [r0, #EMIF_SDRAM_REFRESH_CTRL_SHDW]
+	ldr	r1, emif_pmcr_val
+	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CTRL_SHDW]
 	ldr	r1, emif_pmcr_shdw_val
 	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CTRL_SHDW]
 
+	cmp	r2, #EMIF_AM437X_REGISTERS
+	bne	emif_skip_restore_extra_regs
+
+	ldr     r1, emif_rd_wr_level_ramp_ctrl
+	str	r1, [r0, #EMIF_READ_WRITE_LEVELING_RAMP_CONTROL]
+	ldr	r1, emif_rd_wr_exec_thresh
+	str	r1, [r0, #EMIF_READ_WRITE_EXECUTION_THRESHOLD]
+	ldr	r1, emif_cos_config
+	str	r1, [r0, #EMIF_COS_CONFIG]
+	ldr	r1, emif_priority_to_cos_mapping
+	str	r1, [r0, #EMIF_PRIORITY_TO_CLASS_OF_SERVICE_MAPPING]
+	ldr	r1, emif_connect_id_serv_1_map
+	str	r1, [r0, #EMIF_CONNECTION_ID_TO_CLASS_OF_SERVICE_1_MAPPING]
+	ldr	r1, emif_connect_id_serv_2_map
+	str	r1, [r0, #EMIF_CONNECTION_ID_TO_CLASS_OF_SERVICE_2_MAPPING]
+	ldr	r1, emif_lpddr2_nvm_tim
+	str	r1, [r0, #EMIF_LPDDR2_NVM_TIMING]
+	ldr	r1, emif_lpddr2_nvm_tim_shdw
+	str	r1, [r0, #EMIF_LPDDR2_NVM_TIMING_SHDW]
+	ldr	r1, emif_ocp_config_val
+	str	r1, [r0, #EMIF_OCP_CONFIG]
+	ldr	r1, emif_dll_calib_ctrl_val
+	str	r1, [r0, #EMIF_DLL_CALIB_CTRL]
+	ldr	r1, emif_dll_calib_ctrl_val_shdw
+	str	r1, [r0, #EMIF_DLL_CALIB_CTRL_SHDW]
+	ldr	r1, emif_zqcfg_val
+	str	r1, [r0, #EMIF_SDRAM_OUTPUT_IMPEDANCE_CALIBRATION_CONFIG]
+
+	/* Loop and restore entire block of emif phy regs */
+	mov	r2, #0x0
+	adrl	r3, emif_ext_phy_ctrl_vals
+	add	r4, r0, #EMIF_EXT_PHY_CTRL_1
+ddr_phy_ctrl_restore:
+	ldr	r1, [r3, r2]
+	str	r1, [r4, r2]
+	add	r2, r2, #0x4
+	cmp	r2, #AM43XX_EMIF_PHY_CTRL_REG_COUNT
+	bne	ddr_phy_ctrl_restore
+
+emif_skip_restore_extra_regs:
 	/*
 	 * Output impedence calib needed only for DDR3
 	 * but since the initial state of this will be
@@ -198,8 +286,6 @@ ENDPROC(ti_emif_abort_sr)
 
 	.align 3
 /* DDR related defines */
-emif_addr_virt:
-	.word	0xDEADBEEF
 emif_rd_lat_val:
 	.word	0xDEADBEEF
 emif_timing1_val:
@@ -218,6 +304,32 @@ emif_pmcr_val:
 	.word	0xDEADBEEF
 emif_pmcr_shdw_val:
 	.word	0xDEADBEEF
+emif_rd_wr_level_ramp_ctrl:
+	.word	0xDEADBEEF
+emif_rd_wr_exec_thresh:
+	.word	0xDEADBEEF
+emif_cos_config:
+	.word	0xDEADBEEF
+emif_priority_to_cos_mapping:
+	.word	0xDEADBEEF
+emif_connect_id_serv_1_map:
+	.word	0xDEADBEEF
+emif_connect_id_serv_2_map:
+	.word	0xDEADBEEF
+emif_ocp_config_val:
+	.word	0xDEADBEEF
+emif_lpddr2_nvm_tim:
+	.word	0xDEADBEEF
+emif_lpddr2_nvm_tim_shdw:
+	.word	0xDEADBEEF
+emif_dll_calib_ctrl_val:
+	.word	0xDEADBEEF
+emif_dll_calib_ctrl_val_shdw:
+	.word	0xDEADBEEF
+emif_ddr_phy_ctlr_1:
+	.word	0xDEADBEEF
+emif_ext_phy_ctrl_vals:
+	.space	0x120
 
 ENTRY(ti_emif_base_addr_virt)
         .word   0x00000000
