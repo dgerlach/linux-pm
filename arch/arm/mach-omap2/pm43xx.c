@@ -29,6 +29,7 @@
 #include <asm/fncpy.h>
 #include <asm/proc-fns.h>
 #include <asm/suspend.h>
+#include <asm/smp_scu.h>
 #include <asm/system_misc.h>
 
 #include "clockdomain.h"
@@ -39,6 +40,7 @@
 #include "soc.h"
 
 static struct powerdomain *cefuse_pwrdm, *gfx_pwrdm;
+static void __iomem *scu_base;
 
 static int (*am43xx_do_wfi_sram)(unsigned long unused);
 static phys_addr_t am43xx_do_wfi_sram_phys;
@@ -52,7 +54,9 @@ static int am43xx_pm_suspend(void)
 	/* Try to put GFX to sleep */
 	omap_set_pwrdm_state(gfx_pwrdm, PWRDM_POWER_OFF);
 
+	scu_power_mode(scu_base, SCU_PM_POWEROFF);
 	ret = cpu_suspend(0, am43xx_do_wfi_sram);
+	scu_power_mode(scu_base, SCU_PM_NORMAL);
 
 	status = pwrdm_read_pwrst(gfx_pwrdm);
 	if (status != PWRDM_POWER_OFF)
@@ -141,13 +145,13 @@ static int am43xx_push_sram_idle(void)
 	phys_addr_t ocmcram_location;
 	int ret;
 
-	ret = ti_emif_copy_pm_function_table(&am33xx_emif_sram_table);
+	ret = ti_emif_copy_pm_function_table(&am43xx_emif_sram_table);
 	if (ret) {
 		pr_err("PM: Cannot copy emif functions to sram, no PM available\n");
 		return -ENODEV;
 	}
 
-	np = of_find_compatible_node(NULL, NULL, "ti,omap3-mpu");
+	np = of_find_compatible_node(NULL, NULL, "ti,omap4-mpu");
 
 	if (!np) {
 		pr_warn("PM: %s: Unable to find device node for mpu\n",
@@ -173,7 +177,6 @@ static int am43xx_push_sram_idle(void)
 	am43xx_do_wfi_sram = (void *)fncpy((void *)ocmcram_location,
 					   &am43xx_do_wfi,
 					   am43xx_do_wfi_sz);
-
 	return 0;
 }
 
@@ -201,6 +204,12 @@ int __init am43xx_pm_init(void)
 		omap_set_pwrdm_state(cefuse_pwrdm, PWRDM_POWER_OFF);
 	else
 		pr_warn("PM: Failed to get cefuse_pwrdm\n");
+
+	scu_base = ioremap(scu_a9_get_base(), SZ_256);
+	if (!scu_base) {
+		pr_err("PM: Cannot get SCU base addr");
+		return -ENODEV;
+	}
 
 	ret = am43xx_push_sram_idle();
 	if (ret)
