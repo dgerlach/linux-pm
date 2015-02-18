@@ -361,6 +361,7 @@ err0:
 }
 
 static const struct dev_pm_ops omap_usb2_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(omap_usb2_runtime_suspend, omap_usb2_runtime_resume)
 	SET_RUNTIME_PM_OPS(omap_usb2_runtime_suspend, omap_usb2_runtime_resume,
 		NULL)
 };
