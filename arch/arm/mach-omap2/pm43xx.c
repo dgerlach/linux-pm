@@ -24,7 +24,7 @@
 #include <linux/sizes.h>
 #include <linux/suspend.h>
 #include <linux/ti-emif-sram.h>
-#include <linux/wkup_m3_ipc.h>
+#include <linux/platform_data/wkup_m3_ipc.h>
 
 #include <asm/fncpy.h>
 #include <asm/proc-fns.h>
@@ -44,6 +44,8 @@ static void __iomem *scu_base;
 
 static int (*am43xx_do_wfi_sram)(unsigned long unused);
 static phys_addr_t am43xx_do_wfi_sram_phys;
+
+static struct wkup_m3_pm_ipc_ops *m3_ops;
 
 #ifdef CONFIG_SUSPEND
 static int am43xx_pm_suspend(void)
@@ -65,7 +67,7 @@ static int am43xx_pm_suspend(void)
 	if (ret) {
 		pr_err("PM: Kernel suspend failure\n");
 	} else {
-		i = wkup_m3_request_pm_status();
+		i = m3_ops->request_pm_status();
 
 		switch (i) {
 		case 0:
@@ -105,7 +107,7 @@ static int am43xx_pm_begin(suspend_state_t state)
 
 	switch (state) {
 	case PM_SUSPEND_MEM:
-		ret = wkup_m3_prepare_low_power(state);
+		ret = m3_ops->prepare_low_power(state);
 		break;
 	}
 
@@ -114,7 +116,8 @@ static int am43xx_pm_begin(suspend_state_t state)
 
 static void am43xx_pm_end(void)
 {
-	wkup_m3_finish_low_power();
+	if (m3_ops)
+		m3_ops->finish_low_power();
 }
 
 static int am43xx_pm_valid(suspend_state_t state)
@@ -134,6 +137,31 @@ static const struct platform_suspend_ops am43xx_pm_ops = {
 	.valid		= am43xx_pm_valid,
 };
 #endif /* CONFIG_SUSPEND */
+
+void am43xx_pm_set_ipc_ops(struct wkup_m3_pm_ipc_ops *ops)
+{
+	void *resume_address;
+	u32 temp;
+
+	m3_ops = ops;
+
+	if (!m3_ops)
+		return;
+
+	temp = ti_emif_get_mem_type();
+	if (temp < 0) {
+		pr_err("PM: Cannot determine memory type, no PM available\n");
+		m3_ops = NULL;
+		return;
+	}
+	m3_ops->set_mem_type(temp);
+
+	/* Physical resume address to be used by ROM code */
+	resume_address = (void *)am43xx_do_wfi_sram_phys +
+			 am43xx_resume_offset + 0x4;
+
+	m3_ops->set_resume_address(resume_address);
+}
 
 /*
  * Push the minimal suspend-resume code to SRAM
@@ -214,19 +242,6 @@ int __init am43xx_pm_init(void)
 	ret = am43xx_push_sram_idle();
 	if (ret)
 		return ret;
-
-	/* Physical resume address to be used by ROM code */
-	resume_address = (void *)am43xx_do_wfi_sram_phys +
-			 am43xx_resume_offset + 0x4;
-
-	wkup_m3_set_resume_address(resume_address);
-
-	temp = ti_emif_get_mem_type();
-	if (temp < 0) {
-		pr_err("PM: Cannot determine memory type, no PM available\n");
-		return -ENODEV;
-	}
-	wkup_m3_set_mem_type(temp);
 
 #ifdef CONFIG_SUSPEND
 	suspend_set_ops(&am43xx_pm_ops);
