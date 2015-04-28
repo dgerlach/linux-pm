@@ -89,10 +89,9 @@ static int sram_probe(struct platform_device *pdev)
 		map_exec = true;
 	if (pdata && pdata->map_exec)
 		map_exec |= true;
-//TODO: FIXME
-//	if (map_exec)
-///		virt_base = devm_ioremap_exec(&pdev->dev, res->start, size);
-///	else
+	if (map_exec)
+		virt_base = devm_ioremap_exec(&pdev->dev, res->start, size);
+	else
 		virt_base = devm_ioremap_wc(&pdev->dev, res->start, size);
 
 	if (IS_ERR(virt_base))
