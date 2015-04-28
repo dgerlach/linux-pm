@@ -481,7 +481,7 @@ static struct irq_domain_ops wakeupgen_domain_ops = {
 	.xlate	= wakeupgen_domain_xlate,
 	.alloc	= wakeupgen_domain_alloc,
 	.free	= irq_domain_free_irqs_common,
-}
+};
 
 /* Define ops for context save and restore for each SoC */
 
