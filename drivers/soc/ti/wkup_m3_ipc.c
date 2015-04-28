@@ -378,7 +378,7 @@ static int wkup_m3_ipc_probe(struct platform_device *pdev)
 	}
 
 	ret = devm_request_irq(dev, irq, wkup_m3_txev_handler,
-			       IRQF_DISABLED, "wkup_m3_txev", &m3_ipc_state);
+			       NULL, "wkup_m3_txev", &m3_ipc_state);
 	if (ret) {
 		dev_err(dev, "request_irq failed\n");
 		return ret;
