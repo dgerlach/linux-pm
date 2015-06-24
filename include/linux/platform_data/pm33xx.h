@@ -38,12 +38,12 @@ struct am33xx_pm_sram_data {
 	u32 wfi_flags;
 	u32 l2_aux_ctrl_val;
 	u32 l2_prefetch_ctrl_val;
-};
+} __packed __aligned(8);
 
 struct am33xx_pm_ro_sram_data {
 	u32 amx3_pm_sram_data_virt;
 	u32 amx3_pm_sram_data_phys;
-};
+} __packed __aligned(8);
 
 extern inline void amx3_pm_asm_offsets(void)
 {
