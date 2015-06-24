@@ -71,6 +71,42 @@ void omap_pm_get_oscillator(u32 *tstart, u32 *tshut)
 }
 #endif
 
+static int __init _init_omap_device(char *name)
+{
+	struct omap_hwmod *oh;
+	struct platform_device *pdev;
+
+	oh = omap_hwmod_lookup(name);
+	if (WARN(!oh, "%s: could not find omap_hwmod for %s\n",
+		 __func__, name))
+		return -ENODEV;
+
+	pdev = omap_device_build(oh->name, 0, oh, NULL, 0);
+	if (WARN(IS_ERR(pdev), "%s: could not build omap_device for %s\n",
+		 __func__, name))
+		return -ENODEV;
+
+	return 0;
+}
+
+/*
+ * Build omap_devices for processors and bus.
+ */
+static void __init omap2_init_processor_devices(void)
+{
+	_init_omap_device("mpu");
+	if (omap3_has_iva())
+		_init_omap_device("iva");
+
+	if (cpu_is_omap44xx()) {
+		_init_omap_device("l3_main_1");
+		_init_omap_device("dsp");
+		_init_omap_device("iva");
+	} else {
+		_init_omap_device("l3_main");
+	}
+}
+
 int __init omap_pm_clkdms_setup(struct clockdomain *clkdm, void *unused)
 {
 	clkdm_allow_idle(clkdm);
