@@ -15,11 +15,14 @@
  */
 
 #include <linux/cpu.h>
+#include <linux/cpuidle.h>
+#include <linux/cpu_pm.h>
 #include <linux/err.h>
 #include <linux/genalloc.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/io.h>
+#include <linux/irqchip/irq-omap-intc.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_data/pm33xx.h>
@@ -30,6 +33,7 @@
 #include <linux/wkup_m3_ipc.h>
 #include <linux/rtc.h>
 
+#include <asm/cpuidle.h>
 #include <asm/fncpy.h>
 #include <asm/proc-fns.h>
 #include <asm/suspend.h>
@@ -72,6 +76,66 @@ static struct wkup_m3_wakeup_src rtc_ext_wakeup = {
 	.irq_nr = 0, .src = "Ext wakeup",
 };
 #endif /* CONFIG_SUSPEND */
+
+static int __init amx3_idle_init(struct device_node *cpu_node, int cpu)
+{
+	return 0;
+}
+
+static void am33xx_do_sram_idle(u32 wfi_flags)
+{
+	int ret = 0;
+
+	if (!m3_ipc || !pm_ops)
+		return;
+
+	ret = m3_ipc->ops->prepare_low_power(m3_ipc, WKUP_M3_IDLE);
+	if (!ret)
+		pm_ops->cpu_suspend(am33xx_do_wfi_sram, wfi_flags);
+}
+
+static int am33xx_idle_enter(unsigned long index)
+{
+	struct cpuidle_state *state;
+	u32 wfi_flags = 0;
+
+	switch (index) {
+	/* C1 state: Use wkup_m3 to idle MPU CLKDM */
+	case 1:
+		wfi_flags |= WFI_FLAG_WAKE_M3;
+		break;
+	};
+
+	cpu_pm_enter();
+	am33xx_do_sram_idle(wfi_flags);
+	cpu_pm_exit();
+
+	return index;
+}
+
+static struct cpuidle_ops am33xx_cpuidle_ops __initdata = {
+	.init = amx3_idle_init,
+        .suspend = am33xx_idle_enter,
+};
+
+static int am43xx_idle_enter(unsigned long index)
+{
+	pr_info("idlingi\n");
+	if (!pm_ops)
+		return index;
+
+	pm_ops->cpu_suspend(NULL, NULL);
+
+	return index;
+}
+
+static struct cpuidle_ops am43xx_cpuidle_ops __initdata = {
+	.init = amx3_idle_init,
+        .suspend = am43xx_idle_enter,
+};
+
+CPUIDLE_METHOD_OF_DECLARE(pm33xx_idle, "ti,am3352", &am33xx_cpuidle_ops);
+CPUIDLE_METHOD_OF_DECLARE(pm43xx_idle, "ti,am4372", &am43xx_cpuidle_ops);
 
 /*
  * Push the minimal suspend-resume code to SRAM
@@ -247,6 +311,8 @@ static int am33xx_pm_begin(suspend_state_t state)
 		rtc_only_idle = 0;
 	}
 
+	cpu_idle_poll_ctrl(true);
+
 	switch (state) {
 	case PM_SUSPEND_MEM:
 		ret = m3_ipc->ops->prepare_low_power(m3_ipc, WKUP_M3_DEEPSLEEP);
@@ -279,6 +345,8 @@ static void am33xx_pm_end(void)
 	}
 
 	rtc_only_idle = 0;
+
+	cpu_idle_poll_ctrl(false);
 }
 
 static int am33xx_pm_valid(suspend_state_t state)

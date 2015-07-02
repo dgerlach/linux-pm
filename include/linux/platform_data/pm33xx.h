@@ -18,8 +18,6 @@
 #ifndef _LINUX_PLATFORM_DATA_PM33XX_H
 #define _LINUX_PLATFORM_DATA_PM33XX_H
 
-#define WFI_FLAG_RTC_ONLY	BIT(8)
-#ifndef __ASSEMBLER__
 #define WFI_FLAG_SELF_REFRESH          (1 << 2)
 #define WFI_FLAG_SAVE_EMIF             (1 << 3)
 #define WFI_FLAG_WAKE_M3               (1 << 4)
@@ -41,6 +39,7 @@ struct am33xx_pm_platform_data {
 	int	(*init)(void);
 	int	(*soc_suspend)(unsigned int state, int (*fn)(unsigned long),
 			       unsigned long args);
+	int	(*cpu_suspend)(int (*fn)(unsigned long), unsigned long args);
 	struct  am33xx_pm_sram_addr *pm_sram_addr;
 	void (*save_context)(void);
 	void (*restore_context)(void);
