@@ -390,6 +390,20 @@ void *arch_memremap_wb(phys_addr_t phys_addr, size_t size)
 	return (void *)phys_addr;
 }
 
+void __iomem *arch_memremap_exec(resource_size_t res_cookie, size_t size)
+{
+	return __arm_ioremap_caller(res_cookie, size, 0,
+				    __builtin_return_address(0));
+}
+EXPORT_SYMBOL(ioremap_exec);
+
+void __iomem *arch_memremap_exec_nocache(resource_size_t res_cookie, size_t size)
+{
+	return __arm_ioremap_caller(res_cookie, size, 0,
+				    __builtin_return_address(0));
+}
+EXPORT_SYMBOL(ioremap_exec_nocache);
+
 void __iounmap(volatile void __iomem *addr)
 {
 }
