@@ -362,8 +362,13 @@ static int sram_probe(struct platform_device *pdev)
 
 	if (of_property_read_bool(pdev->dev.of_node, "no-memory-wc"))
 		sram->virt_base = devm_ioremap(sram->dev, res->start, size);
+	else if (of_property_read_bool(pdev->dev.of_node, "map-exec"))
+		sram->virt_base = devm_ioremap_exec(sram->dev, res->start, size);
+	else if (of_property_read_bool(pdev->dev.of_node, "map-exec-nocache"))
+		sram->virt_base = devm_ioremap_exec_nocache(sram->dev, res->start, size);
 	else
 		sram->virt_base = devm_ioremap_wc(sram->dev, res->start, size);
+
 	if (IS_ERR(sram->virt_base))
 		return PTR_ERR(sram->virt_base);
 
