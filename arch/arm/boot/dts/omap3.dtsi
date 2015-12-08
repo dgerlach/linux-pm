@@ -59,6 +59,7 @@
 		mpu {
 			compatible = "ti,omap3-mpu";
 			ti,hwmods = "mpu";
+			sram = <&ocmcram>;
 		};
 
 		iva: iva {
@@ -150,6 +151,21 @@
 					pinctrl-single,register-width = <16>;
 					pinctrl-single,function-mask = <0xff1f>;
 				};
+			};
+		};
+
+		ocmcram: ocmcram@40200000 {
+			compatible = "mmio-sram";
+			reg = <0x40200000 0x10000>; /* 64k */
+			map-exec-nocache;
+			ranges = <0x0 0x40200000 0x10000>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			sram-res@0 {
+			        compatible = "ti,reserved-ram";
+			        reg = <0x0 0xC000>;
 			};
 		};
 
