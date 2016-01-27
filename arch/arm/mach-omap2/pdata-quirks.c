@@ -579,8 +579,7 @@ void __init pdata_quirks_init(const struct of_device_id *omap_dt_match_table)
 	 * We still need this for omap2420 and omap3 PM to work, others are
 	 * using drivers/misc/sram.c already.
 	 */
-	if (of_machine_is_compatible("ti,omap2420") ||
-	    of_machine_is_compatible("ti,omap3"))
+	if (of_machine_is_compatible("ti,omap2420"))
 		omap_sdrc_init(NULL, NULL);
 
 	pdata_quirks_check(auxdata_quirks);
