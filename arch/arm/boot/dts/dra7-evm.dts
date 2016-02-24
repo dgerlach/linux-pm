@@ -646,6 +646,7 @@
 
 &cpu0 {
 	cpu0-supply = <&smps123_reg>;
+	voltage-tolerance = <1>;
 };
 
 &qspi {
