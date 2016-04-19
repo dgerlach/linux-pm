@@ -306,10 +306,11 @@ EXPORT_SYMBOL_GPL(dev_pm_opp_get_max_clock_latency);
 unsigned long dev_pm_opp_get_max_volt_latency(struct device *dev)
 {
 	struct opp_table *opp_table;
-	struct dev_pm_opp *opp;
+	struct dev_pm_opp *opp, *min_opp, *max_opp;
 	struct regulator *reg;
 	unsigned long latency_ns = 0;
-	unsigned long min_uV = ~0, max_uV = 0;
+	unsigned long old_min_uV, old_uV, old_max_uV;
+	unsigned long new_min_uV, new_uV, new_max_uV;
 	int ret;
 
 	rcu_read_lock();
@@ -334,11 +335,19 @@ unsigned long dev_pm_opp_get_max_volt_latency(struct device *dev)
 		if (!opp->available)
 			continue;
 
-		if (opp->u_volt_min < min_uV)
-			min_uV = opp->u_volt_min;
-		if (opp->u_volt_max > max_uV)
-			max_uV = opp->u_volt_max;
+		if (min_opp && opp->u_volt_min < min_opp->u_volt_min)
+			min_opp = opp;
+		if (max_opp && opp->u_volt_max > max_opp->u_volt_max)
+			max_opp = opp;
 	}
+
+	old_min_uV = dev_pm_opp_get_min_voltage(opp);
+	old_uV = dev_pm_opp_get_voltage(opp);
+	old_max_uV = dev_pm_opp_get_max_voltage(opp);
+
+	new_min_uV = dev_pm_opp_get_min_voltage(opp);
+	new_uV = dev_pm_opp_get_voltage(opp);
+	new_max_uV = dev_pm_opp_get_max_voltage(opp);
 
 	rcu_read_unlock();
 
@@ -346,7 +355,13 @@ unsigned long dev_pm_opp_get_max_volt_latency(struct device *dev)
 	 * The caller needs to ensure that opp_table (and hence the regulator)
 	 * isn't freed, while we are executing this routine.
 	 */
-	ret = regulator_set_voltage_time(reg, min_uV, max_uV);
+	ret = regulator_set_voltage_time_triplet(reg, old_uV,
+						 old_min_uV,
+						 old_max_uV,
+						 new_uV,
+						 new_min_uV,
+						 new_max_uV);
+
 	if (ret > 0)
 		latency_ns = ret * 1000;
 
