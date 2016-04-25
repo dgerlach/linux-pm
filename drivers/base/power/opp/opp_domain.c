@@ -388,7 +388,7 @@ int dev_pm_opp_domain_get_latency(struct pm_opp_domain *pod, int old_uV,
 			return 0;
 
 		ops = oppdm_dev->desc->ops;
-		if (ops->oppdm_put)
+		if (ops->oppdm_get_latency)
 			total_latency += ops->oppdm_get_latency(oppdm_dev->dev,
 								pod->data,
 								old_uV,
@@ -428,7 +428,7 @@ bool dev_pm_opp_domain_opp_supported_by_supply(struct pm_opp_domain *pod,
 					       unsigned long uV_max)
 {
 	struct pm_opp_domain_dev *oppdm_dev = pod->oppdm_dev;
-	int ret;
+	int ret = 0;
 
 	if (oppdm_dev) {
 		const struct pm_opp_domain_ops *ops;
@@ -438,10 +438,11 @@ bool dev_pm_opp_domain_opp_supported_by_supply(struct pm_opp_domain *pod,
 
 		ops = oppdm_dev->desc->ops;
 
-		ret = ops->oppdm_is_supported_voltage(oppdm_dev->dev,
-						      pod->data,
-						      uV_min,
-						      uV_max);
+		if (ops->oppdm_is_supported_voltage)
+			ret = ops->oppdm_is_supported_voltage(oppdm_dev->dev,
+							      pod->data,
+							      uV_min,
+							      uV_max);
 
 		if (!ret)
 			return false;
