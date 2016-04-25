@@ -11,7 +11,6 @@
  * for generic opp domains to handle devices with ABB regulator and/or
  * SmartReflex Class0.
  */
-#define DEBUG
 #include <linux/clk.h>
 #include <linux/cpufreq.h>
 #include <linux/device.h>
@@ -392,7 +391,7 @@ static int omap_oppdm_get(struct device *oppdm_dev,
 		return -ENOMEM;
 
 	/* If we need optimized voltage */
-	if (of_data->flags & VOLTDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE) {
+	if (of_data->flags & OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE) {
 		ret = oppdm_store_optimized_voltages(oppdm_dev, data);
 		if (ret)
 			goto out_free;
@@ -418,7 +417,7 @@ static int omap_oppdm_get(struct device *oppdm_dev,
 		goto out_unreg;
 	}
 
-	if (of_data->flags & VOLTDM_HAS_NO_ABB) {
+	if (of_data->flags & OPPDM_HAS_NO_ABB) {
 		data->vbb_reg = ERR_PTR(-ENODEV);
 	} else {
 		data->vbb_reg = regulator_get(request_dev, "vbb");
@@ -440,7 +439,7 @@ out_unreg:
 out_unreg_vdd:
 	regulator_unregister_supply_alias(request_dev, "vdd");
 out_release_optimized_voltages:
-	if (of_data->flags & VOLTDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE)
+	if (of_data->flags & OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE)
 		oppdm_free_optimized_voltages(oppdm_dev, data);
 out_free:
 	kfree(data);
@@ -478,21 +477,21 @@ static void omap_oppdm_put(struct device *oppdm_dev,
  *
  * Checks that voltage is supported by both vdd and vbb regulators if present
  */
-static void omap_oppdm_is_supported_voltage(struct device *oppdm_dev,
+static bool omap_oppdm_is_supported_voltage(struct device *oppdm_dev,
 					    void *oppdm_data,
 					    unsigned long uV_min,
-					    unsigned long uV_max);
+					    unsigned long uV_max)
 {
 	struct omap_oppdm_data *data = (struct omap_oppdm_data *)oppdm_data;
 
 	if (!IS_ERR(data->vdd_reg) &&
-	    !regulator_is_supported_voltage(data->vdd_reg, opp->u_volt_min,
-					    opp->u_volt_max))
+	    !regulator_is_supported_voltage(data->vdd_reg, uV_min,
+					    uV_max))
 		return false;
 
 	if (!IS_ERR(data->vbb_reg) &&
-	    !regulator_is_supported_voltage(data->vbb_reg, opp->u_volt_min,
-					    opp->u_volt_max))
+	    !regulator_is_supported_voltage(data->vbb_reg, uV_min,
+					    uV_max))
 		return false;
 
 	return true;
@@ -501,8 +500,9 @@ static void omap_oppdm_is_supported_voltage(struct device *oppdm_dev,
 static const struct pm_opp_domain_ops omap_oppdm_ops = {
 	.oppdm_get = omap_oppdm_get,
 	.oppdm_put = omap_oppdm_put,
-	.oppdm_latency = omap_oppdm_latency,
+	.oppdm_get_latency = omap_oppdm_latency,
 	.oppdm_do_transition = omap_oppdm_do_transition,
+	.oppdm_is_supported_voltage = omap_oppdm_is_supported_voltage,
 };
 
 static const struct pm_opp_domain_desc omap_oppdm_desc = {
@@ -515,14 +515,14 @@ static const struct omap_oppdm_of_data omap_generic_of_data = {
 
 static const struct omap_oppdm_of_data omap_omap5_of_data = {
 	.desc = &omap_oppdm_desc,
-	.flags = VOLTDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE,
+	.flags = OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE,
 	.efuse_voltage_mask = 0xFFF,
 	.efuse_voltage_uv = false,
 };
 
 static const struct omap_oppdm_of_data omap_omap5core_of_data = {
 	.desc = &omap_oppdm_desc,
-	.flags = VOLTDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE | VOLTDM_HAS_NO_ABB,
+	.flags = OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE | OPPDM_HAS_NO_ABB,
 	.efuse_voltage_mask = 0xFFF,
 	.efuse_voltage_uv = false,
 };
@@ -565,7 +565,7 @@ static int omap_oppdm_probe(struct platform_device *pdev)
 	return ret;
 }
 
-MODULE_ALIAS("platform:omap_oppdm");
+MODULE_DEVICE_TABLE(of, omap_oppdm_of_match);
 
 static struct platform_driver omap_oppdm_driver = {
 	.probe = omap_oppdm_probe,
