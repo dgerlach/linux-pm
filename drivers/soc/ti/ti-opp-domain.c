@@ -26,40 +26,40 @@
 #include <linux/slab.h>
 
 /**
- * struct omap_oppdm_optimum_voltage_table - optimized voltage table
+ * struct ti_oppdm_optimum_voltage_table - optimized voltage table
  * @reference_uv:	reference voltage (usually Nominal voltage)
  * @optimized_uv:	Optimized voltage from efuse
  */
-struct omap_oppdm_optimum_voltage_table {
+struct ti_oppdm_optimum_voltage_table {
 	unsigned int reference_uv;
 	unsigned int optimized_uv;
 };
 
 /**
- * struct omap_oppdm_data - OMAP specific opp domain data
+ * struct ti_oppdm_data - OMAP specific opp domain data
  * @vdd_reg:	VDD regulator
  * @vbb_reg:	Body Bias regulator
  * @vdd_table:	Optimized voltage mapping table
  * @num_vdd_table: number of entries in vdd_table
  * @vdd_absolute_max_voltage_uv: absolute maximum voltage in UV for the domain
  */
-struct omap_oppdm_data {
+struct ti_oppdm_data {
 	struct regulator *vdd_reg;
 	struct regulator *vbb_reg;
-	struct omap_oppdm_optimum_voltage_table *vdd_table;
+	struct ti_oppdm_optimum_voltage_table *vdd_table;
 	u32 num_vdd_table;
 	u32 vdd_absolute_max_voltage_uv;
 };
 
 /**
- * struct omap_oppdm_of_data - device tree match data
+ * struct ti_oppdm_of_data - device tree match data
  * @desc:	opp domain descriptor for opp domain core
  * @flags:	specific type of opp domain
  * @efuse_voltage_mask: mask required for efuse register representing voltage
  * @efuse_voltage_uv: Are the efuse entries in micro-volts? if not, assume
  *		milli-volts.
  */
-struct omap_oppdm_of_data {
+struct ti_oppdm_of_data {
 	const struct pm_opp_domain_desc *desc;
 #define OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE	BIT(1)
 #define OPPDM_HAS_NO_ABB			BIT(2)
@@ -79,7 +79,7 @@ struct omap_oppdm_of_data {
  * Return: If successful, 0, else appropriate error value.
  */
 static int oppdm_store_optimized_voltages(struct device *dev,
-					  struct omap_oppdm_data *data)
+					  struct ti_oppdm_data *data)
 {
 	void __iomem *base;
 	struct property *prop;
@@ -87,8 +87,8 @@ static int oppdm_store_optimized_voltages(struct device *dev,
 	const __be32 *val;
 	int proplen, i;
 	int ret = 0;
-	struct omap_oppdm_optimum_voltage_table *table;
-	const struct omap_oppdm_of_data *of_data = dev_get_drvdata(dev);
+	struct ti_oppdm_optimum_voltage_table *table;
+	const struct ti_oppdm_of_data *of_data = dev_get_drvdata(dev);
 
 	/* pick up Efuse based voltages */
 	res = platform_get_resource(to_platform_device(dev), IORESOURCE_MEM, 0);
@@ -177,7 +177,7 @@ out_map:
  * @data:	data specific to the device
  */
 static void oppdm_free_optimized_voltages(struct device *dev,
-					  struct omap_oppdm_data *data)
+					  struct ti_oppdm_data *data)
 {
 	kfree(data->vdd_table);
 	data->vdd_table = NULL;
@@ -194,11 +194,11 @@ static void oppdm_free_optimized_voltages(struct device *dev,
  * reference_uv, also return reference_uv if no optimization is needed.
  */
 static int oppdm_get_optimal_vdd_voltage(struct device *dev,
-					 struct omap_oppdm_data *data,
+					 struct ti_oppdm_data *data,
 					 int reference_uv)
 {
 	int i;
-	struct omap_oppdm_optimum_voltage_table *table;
+	struct ti_oppdm_optimum_voltage_table *table;
 
 	if (!data->num_vdd_table)
 		return reference_uv;
@@ -218,7 +218,7 @@ static int oppdm_get_optimal_vdd_voltage(struct device *dev,
 }
 
 /**
- * omap_oppdm_do_transition() - do the opp domain transition
+ * ti_oppdm_do_transition() - do the opp domain transition
  * @dev:	opp domain device for which we are doing the transition
  * @oppdm_data:	data specific to the device
  * @clk_notifier_flags:	clk notifier flags for direction of transition
@@ -228,12 +228,12 @@ static int oppdm_get_optimal_vdd_voltage(struct device *dev,
  *
  * Return: If successful, 0, else appropriate error value.
  */
-static int omap_oppdm_do_transition(struct device *dev,
+static int ti_oppdm_do_transition(struct device *dev,
 				    void *oppdm_data,
 				    unsigned long clk_notifier_flags, int uv,
 				    int uv_min, int uv_max)
 {
-	struct omap_oppdm_data *data = (struct omap_oppdm_data *)oppdm_data;
+	struct ti_oppdm_data *data = (struct ti_oppdm_data *)oppdm_data;
 	int ret;
 	bool do_abb_first;
 	int vdd_uv;
@@ -294,7 +294,7 @@ static int omap_oppdm_do_transition(struct device *dev,
 }
 
 /**
- * omap_oppdm_latency() - provide the transition latency for the opp domain
+ * ti_oppdm_latency() - provide the transition latency for the opp domain
  * @dev:	opp domain device for which we are doing the transition
  * @oppdm_data: data specific to the device
  * @old_uV: starting voltage in microvolts
@@ -307,7 +307,7 @@ static int omap_oppdm_do_transition(struct device *dev,
  * Return: If successful, the combined transition latency from min to max, else
  * returns error value
  */
-static int omap_oppdm_latency(struct device *dev, void *oppdm_data,
+static int ti_oppdm_latency(struct device *dev, void *oppdm_data,
 			       unsigned long old_uv,
 			       unsigned long old_uv_min,
 			       unsigned long old_uv_max,
@@ -315,7 +315,7 @@ static int omap_oppdm_latency(struct device *dev, void *oppdm_data,
 			       unsigned long new_uv_min,
 			       unsigned long new_uv_max)
 {
-	struct omap_oppdm_data *data = (struct omap_oppdm_data *)oppdm_data;
+	struct ti_oppdm_data *data = (struct ti_oppdm_data *)oppdm_data;
 	int ret, tot_latency = 0;
 
 	if (!data)
@@ -357,7 +357,7 @@ skip_vbb:
 	return tot_latency;
 }
 
-static inline void omap_oppdm_cleanup(struct omap_oppdm_data *data)
+static inline void ti_oppdm_cleanup(struct ti_oppdm_data *data)
 {
 	if (!IS_ERR(data->vbb_reg))
 		regulator_put(data->vbb_reg);
@@ -367,7 +367,7 @@ static inline void omap_oppdm_cleanup(struct omap_oppdm_data *data)
 }
 
 /**
- * omap_oppdm_get() - get the opp domain resources specific to request
+ * ti_oppdm_get() - get the opp domain resources specific to request
  * @oppdm_dev:		opp domain device
  * @request_dev:	device for which we have been requested to get
  * @np:			unused
@@ -376,15 +376,15 @@ static inline void omap_oppdm_cleanup(struct omap_oppdm_data *data)
  *
  * Return: 0 if everything went OK, else return appropriate error value.
  */
-static int omap_oppdm_get(struct device *oppdm_dev,
+static int ti_oppdm_get(struct device *oppdm_dev,
 			   struct device *request_dev,
 			   struct device_node *np,
 			   const char *supply,
 			   void **oppdm_data)
 {
-	struct omap_oppdm_data *data;
+	struct ti_oppdm_data *data;
 	int ret = 0;
-	const struct omap_oppdm_of_data *of_data = dev_get_drvdata(oppdm_dev);
+	const struct ti_oppdm_of_data *of_data = dev_get_drvdata(oppdm_dev);
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -448,15 +448,15 @@ out_free:
 }
 
 /**
- * omap_oppdm_put() - release the resources reserved by omap_oppdm_get()
+ * ti_oppdm_put() - release the resources reserved by ti_oppdm_get()
  * @oppdm_dev:		opp domain device for which we reserved resources
  * @request_dev:	device for which we have been requested to put
- * @oppdm_data:		data for the request provided by omap_oppdm_get()
+ * @oppdm_data:		data for the request provided by ti_oppdm_get()
  */
-static void omap_oppdm_put(struct device *oppdm_dev,
+static void ti_oppdm_put(struct device *oppdm_dev,
 			   struct device *request_dev, void *oppdm_data)
 {
-	struct omap_oppdm_data *data = (struct omap_oppdm_data *)oppdm_data;
+	struct ti_oppdm_data *data = (struct ti_oppdm_data *)oppdm_data;
 
 	if (!IS_ERR(data->vbb_reg))
 		regulator_put(data->vbb_reg);
@@ -469,20 +469,20 @@ static void omap_oppdm_put(struct device *oppdm_dev,
 }
 
 /**
- * omap_oppdm_is_supported_voltage() - return if provided voltage is supported
+ * ti_oppdm_is_supported_voltage() - return if provided voltage is supported
  * @oppdm_dev:		opp domain device for which we reserved resources
- * @oppdm_data:		data for the request provided by omap_oppdm_get()
+ * @oppdm_data:		data for the request provided by ti_oppdm_get()
  * @uV_min:		minimum voltage range to check if supported
  * @uV_max		maximum voltage range to check if supported
  *
  * Checks that voltage is supported by both vdd and vbb regulators if present
  */
-static bool omap_oppdm_is_supported_voltage(struct device *oppdm_dev,
+static bool ti_oppdm_is_supported_voltage(struct device *oppdm_dev,
 					    void *oppdm_data,
 					    unsigned long uV_min,
 					    unsigned long uV_max)
 {
-	struct omap_oppdm_data *data = (struct omap_oppdm_data *)oppdm_data;
+	struct ti_oppdm_data *data = (struct ti_oppdm_data *)oppdm_data;
 
 	if (!IS_ERR(data->vdd_reg) &&
 	    !regulator_is_supported_voltage(data->vdd_reg, uV_min,
@@ -497,52 +497,52 @@ static bool omap_oppdm_is_supported_voltage(struct device *oppdm_dev,
 	return true;
 }
 
-static const struct pm_opp_domain_ops omap_oppdm_ops = {
-	.oppdm_get = omap_oppdm_get,
-	.oppdm_put = omap_oppdm_put,
-	.oppdm_get_latency = omap_oppdm_latency,
-	.oppdm_do_transition = omap_oppdm_do_transition,
-	.oppdm_is_supported_voltage = omap_oppdm_is_supported_voltage,
+static const struct pm_opp_domain_ops ti_oppdm_ops = {
+	.oppdm_get = ti_oppdm_get,
+	.oppdm_put = ti_oppdm_put,
+	.oppdm_get_latency = ti_oppdm_latency,
+	.oppdm_do_transition = ti_oppdm_do_transition,
+	.oppdm_is_supported_voltage = ti_oppdm_is_supported_voltage,
 };
 
-static const struct pm_opp_domain_desc omap_oppdm_desc = {
-	.ops = &omap_oppdm_ops,
+static const struct pm_opp_domain_desc ti_oppdm_desc = {
+	.ops = &ti_oppdm_ops,
 };
 
-static const struct omap_oppdm_of_data omap_generic_of_data = {
-	.desc = &omap_oppdm_desc,
+static const struct ti_oppdm_of_data omap_generic_of_data = {
+	.desc = &ti_oppdm_desc,
 };
 
-static const struct omap_oppdm_of_data omap_omap5_of_data = {
-	.desc = &omap_oppdm_desc,
+static const struct ti_oppdm_of_data omap_omap5_of_data = {
+	.desc = &ti_oppdm_desc,
 	.flags = OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE,
 	.efuse_voltage_mask = 0xFFF,
 	.efuse_voltage_uv = false,
 };
 
-static const struct omap_oppdm_of_data omap_omap5core_of_data = {
-	.desc = &omap_oppdm_desc,
+static const struct ti_oppdm_of_data omap_omap5core_of_data = {
+	.desc = &ti_oppdm_desc,
 	.flags = OPPDM_EFUSE_CLASS0_OPTIMIZED_VOLTAGE | OPPDM_HAS_NO_ABB,
 	.efuse_voltage_mask = 0xFFF,
 	.efuse_voltage_uv = false,
 };
 
-static const struct of_device_id omap_oppdm_of_match[] = {
+static const struct of_device_id ti_oppdm_of_match[] = {
 	{.compatible = "ti,omap-oppdm", .data = &omap_generic_of_data},
 	{.compatible = "ti,omap5-oppdm", .data = &omap_omap5_of_data},
 	{.compatible = "ti,omap5-core-oppdm", .data = &omap_omap5core_of_data},
 	{},
 };
 
-static int omap_oppdm_probe(struct platform_device *pdev)
+static int ti_oppdm_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	const struct of_device_id *match;
 	struct pm_opp_domain_dev *oppdm_dev;
 	int ret = 0;
-	const struct omap_oppdm_of_data *of_data;
+	const struct ti_oppdm_of_data *of_data;
 
-	match = of_match_device(omap_oppdm_of_match, dev);
+	match = of_match_device(ti_oppdm_of_match, dev);
 	if (!match) {
 		/* We do not expect this to happen */
 		dev_err(dev, "%s: Unable to match device\n", __func__);
@@ -565,17 +565,17 @@ static int omap_oppdm_probe(struct platform_device *pdev)
 	return ret;
 }
 
-MODULE_DEVICE_TABLE(of, omap_oppdm_of_match);
+MODULE_DEVICE_TABLE(of, ti_oppdm_of_match);
 
-static struct platform_driver omap_oppdm_driver = {
-	.probe = omap_oppdm_probe,
+static struct platform_driver ti_oppdm_driver = {
+	.probe = ti_oppdm_probe,
 	.driver = {
-		   .name = "omap_oppdm",
+		   .name = "ti_oppdm",
 		   .owner = THIS_MODULE,
-		   .of_match_table = of_match_ptr(omap_oppdm_of_match),
+		   .of_match_table = of_match_ptr(ti_oppdm_of_match),
 		   },
 };
-module_platform_driver(omap_oppdm_driver);
+module_platform_driver(ti_oppdm_driver);
 
 MODULE_DESCRIPTION("Texas Instruments OMAP OPP Domain driver");
 MODULE_AUTHOR("Texas Instruments Inc.");
