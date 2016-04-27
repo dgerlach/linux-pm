@@ -306,3 +306,16 @@ void __init amx3_common_pm_init(void)
 	devinfo.size_data = sizeof(*pdata);
 	platform_device_register_full(&devinfo);
 }
+
+static struct cpuidle_ops am33xx_cpuidle_ops __initdata = {
+	.init = amx3_idle_init,
+        .suspend = am33xx_idle_enter,
+};
+
+static struct cpuidle_ops am43xx_cpuidle_ops __initdata = {
+	.init = amx3_idle_init,
+	.suspend = am43xx_idle_enter,
+};
+
+CPUIDLE_METHOD_OF_DECLARE(pm33xx_idle, "ti,am3352", &am33xx_cpuidle_ops);
+CPUIDLE_METHOD_OF_DECLARE(pm43xx_idle, "ti,am4372", &am43xx_cpuidle_ops);

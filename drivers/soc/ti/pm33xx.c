@@ -77,11 +77,6 @@ static struct wkup_m3_wakeup_src rtc_ext_wakeup = {
 };
 #endif /* CONFIG_SUSPEND */
 
-static int __init amx3_idle_init(struct device_node *cpu_node, int cpu)
-{
-	return 0;
-}
-
 static void am33xx_do_sram_idle(u32 wfi_flags)
 {
 	int ret = 0;
@@ -96,7 +91,6 @@ static void am33xx_do_sram_idle(u32 wfi_flags)
 
 static int am33xx_idle_enter(unsigned long index)
 {
-	struct cpuidle_state *state;
 	u32 wfi_flags = 0;
 
 	switch (index) {
@@ -106,36 +100,19 @@ static int am33xx_idle_enter(unsigned long index)
 		break;
 	};
 
-	cpu_pm_enter();
 	am33xx_do_sram_idle(wfi_flags);
-	cpu_pm_exit();
 
 	return index;
 }
-
-static struct cpuidle_ops am33xx_cpuidle_ops __initdata = {
-	.init = amx3_idle_init,
-        .suspend = am33xx_idle_enter,
-};
 
 static int am43xx_idle_enter(unsigned long index)
 {
-	pr_info("idlingi\n");
+	pr_info("idling\n");
 	if (!pm_ops)
-		return index;
-
-	pm_ops->cpu_suspend(NULL, NULL);
+		return 0;
 
 	return index;
 }
-
-static struct cpuidle_ops am43xx_cpuidle_ops __initdata = {
-	.init = amx3_idle_init,
-        .suspend = am43xx_idle_enter,
-};
-
-CPUIDLE_METHOD_OF_DECLARE(pm33xx_idle, "ti,am3352", &am33xx_cpuidle_ops);
-CPUIDLE_METHOD_OF_DECLARE(pm43xx_idle, "ti,am4372", &am43xx_cpuidle_ops);
 
 /*
  * Push the minimal suspend-resume code to SRAM
