@@ -37,11 +37,11 @@
 ENTRY(am33xx_do_wfi)
 	stmfd	sp!, {r4 - r11, lr}	@ save registers on stack
 
-	str	r0, wfi_flags
+	/* Move wfi_flags argument to a preserved register */
+	mov	r4, r0
 
 	/* Only necessary if PER is losing context */
-	ldr	r2, wfi_flags
-	tst	r2, #WFI_FLAG_SAVE_EMIF
+	tst	r4, #WFI_FLAG_SAVE_EMIF
 	beq	emif_skip_save
 
 	/*
@@ -71,16 +71,14 @@ ENTRY(am33xx_do_wfi)
 	blx	r1
 
 emif_skip_save:
-	ldr	r2, wfi_flags
-	tst	r2, #WFI_FLAG_SELF_REFRESH
+	tst	r4, #WFI_FLAG_SELF_REFRESH
 	beq	emif_skip_enter_sr
 
 	ldr	r1, ti_emif_enter_sr
 	blx	r1
 
 emif_skip_enter_sr:
-	ldr	r2, wfi_flags
-	tst	r2, #WFI_FLAG_DISABLE_EMIF
+	tst	r4, #WFI_FLAG_DISABLE_EMIF
 	beq	emif_skip_disable
 
 	/* Disable EMIF */
@@ -96,8 +94,7 @@ wait_emif_disable:
 	bne	wait_emif_disable
 
 emif_skip_disable:
-	ldr	r2, wfi_flags
-	tst	r2, #WFI_FLAG_WAKE_M3
+	tst	r4, #WFI_FLAG_WAKE_M3
 	beq	wkup_m3_skip
 
 	ldr	r1, virt_emif_clkctrl
@@ -157,8 +154,7 @@ wkup_m3_skip:
 	str	r2, [r1]
 
 	/* Only necessary if PER is losing context */
-	ldr	r2, wfi_flags
-	tst	r2, #WFI_FLAG_SELF_REFRESH
+	tst	r4, #WFI_FLAG_SELF_REFRESH
 	beq	emif_skip_exit_sr_abt
 
 	/* Re-enable EMIF */
