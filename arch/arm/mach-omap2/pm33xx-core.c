@@ -15,6 +15,8 @@
  */
 
 #include <linux/clk.h>
+#include <linux/cpuidle.h>
+#include <asm/cpuidle.h>
 #include <linux/platform_data/gpio-omap.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/wkup_m3_ipc.h>
@@ -182,11 +184,13 @@ static int am33xx_cpu_suspend(int (*fn)(unsigned long), unsigned long args)
 
 static int am43xx_cpu_suspend(int (*fn)(unsigned long), unsigned long args)
 {
+	int ret = 0;
+
 	if (!scu_base)
 		return 0;
 
 	scu_power_mode(scu_base, SCU_PM_DORMANT);
-	wfi();
+	ret = cpu_suspend(args, fn);
 	scu_power_mode(scu_base, SCU_PM_NORMAL);
 }
 
@@ -305,6 +309,59 @@ void __init amx3_common_pm_init(void)
 	devinfo.data = pdata;
 	devinfo.size_data = sizeof(*pdata);
 	platform_device_register_full(&devinfo);
+}
+
+static int __init amx3_idle_init(struct device_node *cpu_node, int cpu)
+{
+	const struct of_device_id *match_id;
+	struct device_node *state_node;
+	int i;
+	int state_count = 1;
+	cpumask_t mask;
+
+	for (i = 0; ; i++) {
+		state_node = of_parse_phandle(cpu_node, "cpu-idle-states", i);
+		if (!state_node)
+			break;
+
+		if (!of_device_is_available(state_node))
+			continue;
+
+		if (i == CPUIDLE_STATE_MAX) {
+			pr_warn("%s: cpuidle states reached max possible\n",
+					__func__);
+			break;
+		}
+
+		pr_info("%s\n", state_node->name);
+
+		state_count++;
+	}
+
+	return 0;
+}
+
+static int am33xx_idle_enter(unsigned long index)
+{
+	u32 wfi_flags = 0;
+
+//	pr_info("ENTERING IDLE ALSO!\n");
+
+	switch (index) {
+	/* C1 state: Use wkup_m3 to idle MPU CLKDM */
+	case 1:
+		wfi_flags |= WFI_FLAG_WAKE_M3;
+		break;
+	};
+
+//	am33xx_do_sram_idle(wfi_flags);
+
+	return index;
+}
+
+static int am43xx_idle_enter(unsigned long index)
+{
+	return index;
 }
 
 static struct cpuidle_ops am33xx_cpuidle_ops __initdata = {

@@ -22,11 +22,8 @@
 #include "iomap.h"
 #include "cm33xx.h"
 
-#define WFI_FLAG_SELF_REFRESH		(1 << 2)
-#define WFI_FLAG_SAVE_EMIF		(1 << 3)
-#define WFI_FLAG_WAKE_M3		(1 << 4)
-#define WFI_FLAG_DISABLE_EMIF		(1 << 7)
-#define WFI_FLAG_RTC_ONLY		(1 << 8)
+/* replicated define because linux/bitops.h cannot be included in assembly */
+#define BIT(nr)			(1 << (nr))
 
 #define AM33XX_CM_CLKCTRL_MODULEMODE_DISABLE			0x0003
 #define AM33XX_CM_CLKCTRL_MODULEMODE_ENABLE			0x0002
@@ -40,9 +37,9 @@ ENTRY(am33xx_do_wfi)
 	/* Move wfi_flags argument to a preserved register */
 	mov	r4, r0
 
-	/* Only necessary if PER is losing context */
-	tst	r4, #WFI_FLAG_SAVE_EMIF
-	beq	emif_skip_save
+	/* Only flush cache is we know we are losing MPU context */
+	tst	r4, #WFI_FLAG_FLUSH_CACHE
+	beq	cache_skip_flush
 
 	/*
 	 * Flush all data from the L1 and L2 data cache before disabling
@@ -67,19 +64,21 @@ ENTRY(am33xx_do_wfi)
 	ldr	r1, kernel_flush
 	blx	r1
 
+cache_skip_flush:
+	/* Only necessary if PER is losing context */
+	tst	r4, #WFI_FLAG_SAVE_EMIF
+	beq	emif_skip_save
+
 	ldr	r1, ti_emif_save_context
 	blx	r1
 
 emif_skip_save:
+	/* Check if we want self refresh, if so enter SR and disable EMIF */
 	tst	r4, #WFI_FLAG_SELF_REFRESH
 	beq	emif_skip_enter_sr
 
 	ldr	r1, ti_emif_enter_sr
 	blx	r1
-
-emif_skip_enter_sr:
-	tst	r4, #WFI_FLAG_DISABLE_EMIF
-	beq	emif_skip_disable
 
 	/* Disable EMIF */
 	ldr     r1, virt_emif_clkctrl
@@ -93,7 +92,7 @@ wait_emif_disable:
 	cmp	r2, r3
 	bne	wait_emif_disable
 
-emif_skip_disable:
+emif_skip_enter_sr:
 	tst	r4, #WFI_FLAG_WAKE_M3
 	beq	wkup_m3_skip
 
@@ -170,6 +169,9 @@ wait_emif_enable:
 	blx	r1
 
 emif_skip_exit_sr_abt:
+	tst	r4, #WFI_FLAG_FLUSH_CACHE
+	beq	cache_skip_restore
+
 	/*
 	 * Set SCTLR.C bit to allow data cache allocation
 	 */
@@ -177,7 +179,7 @@ emif_skip_exit_sr_abt:
 	orr	r0, r0, #(1 << 2)	@ Enable the C bit
 	mcr	p15, 0, r0, c1, c0, 0
 	isb
-
+cache_skip_restore:
 	/* Let the suspend code know about the abort */
 	mov	r0, #1
 	ldmfd	sp!, {r4 - r11, pc}	@ restore regs and return

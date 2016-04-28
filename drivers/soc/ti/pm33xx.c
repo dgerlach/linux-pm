@@ -89,31 +89,6 @@ static void am33xx_do_sram_idle(u32 wfi_flags)
 		pm_ops->cpu_suspend(am33xx_do_wfi_sram, wfi_flags);
 }
 
-static int am33xx_idle_enter(unsigned long index)
-{
-	u32 wfi_flags = 0;
-
-	switch (index) {
-	/* C1 state: Use wkup_m3 to idle MPU CLKDM */
-	case 1:
-		wfi_flags |= WFI_FLAG_WAKE_M3;
-		break;
-	};
-
-	am33xx_do_sram_idle(wfi_flags);
-
-	return index;
-}
-
-static int am43xx_idle_enter(unsigned long index)
-{
-	pr_info("idling\n");
-	if (!pm_ops)
-		return 0;
-
-	return index;
-}
-
 /*
  * Push the minimal suspend-resume code to SRAM
  */
@@ -444,16 +419,17 @@ static int am33xx_pm_probe(struct platform_device *pdev)
 #endif /* CONFIG_SUSPEND */
 
 	/*
-	 * For a system suspend we want the DDR in self-refresh, we want
-	 * to save the context of the EMIF and shut it off, and we want
-	 * the wkup_m3 to handle low-power transition.
+	 * For a system suspend we must flush the caches, we want
+	 * the DDR in self-refresh, we want to save the context
+	 * of the EMIF, and we want the wkup_m3 to handle low-power
+	 * transition.
 	 */
+	suspend_wfi_flags |= WFI_FLAG_FLUSH_CACHE;
 	suspend_wfi_flags |= WFI_FLAG_SELF_REFRESH;
 	suspend_wfi_flags |= WFI_FLAG_SAVE_EMIF;
-	suspend_wfi_flags |= WFI_FLAG_DISABLE_EMIF;
 	suspend_wfi_flags |= WFI_FLAG_WAKE_M3;
 
-	ret = pm_ops->init();
+	ret = pm_ops->init(am33xx_do_wfi_sram);
 	if (ret) {
 		pr_err("Unable to call core pm init!\n");
 		ret = -ENODEV;

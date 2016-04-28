@@ -64,11 +64,19 @@
 			clock-names = "cpu";
 
 			clock-latency = <300000>; /* From omap-cpufreq driver */
-			cpu-idle-states = <&mpu_gate>;
+			cpu-idle-states = <&mpu_gate
+					   &mpu_off>;
 		};
 
 		idle-states {
-		        mpu_gate: spc {
+		        mpu_gate: mpu_gate {
+				compatible = "arm,idle-state";
+		                entry-latency-us = <40>;
+				exit-latency-us = <90>;
+				min-residency-us = <300>;
+			};
+
+		        mpu_off: mpu_off {
 				compatible = "arm,idle-state";
 		                entry-latency-us = <40>;
 				exit-latency-us = <90>;

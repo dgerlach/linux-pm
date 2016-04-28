@@ -18,11 +18,11 @@
 #ifndef _LINUX_PLATFORM_DATA_PM33XX_H
 #define _LINUX_PLATFORM_DATA_PM33XX_H
 
-#define WFI_FLAG_SELF_REFRESH          (1 << 2)
-#define WFI_FLAG_SAVE_EMIF             (1 << 3)
-#define WFI_FLAG_WAKE_M3               (1 << 4)
-#define WFI_FLAG_DISABLE_EMIF          (1 << 7)
-#define WFI_FLAG_RTC_ONLY              (1 << 8)
+#define WFI_FLAG_FLUSH_CACHE		BIT(0)
+#define WFI_FLAG_SELF_REFRESH		BIT(1)
+#define WFI_FLAG_SAVE_EMIF		BIT(2)
+#define WFI_FLAG_WAKE_M3		BIT(3)
+#define WFI_FLAG_RTC_ONLY		BIT(4)
 
 #ifndef __ASSEMBLER__
 /* for sharing asm function addrs with amx3 pm modules */
@@ -36,7 +36,8 @@ struct am33xx_pm_sram_addr {
 };
 
 struct am33xx_pm_platform_data {
-	int	(*init)(void);
+	int     (*init)(void (*do_sram_cpuidle)(u32 wfi_flags));
+	int     (*deinit)(void);
 	int	(*soc_suspend)(unsigned int state, int (*fn)(unsigned long),
 			       unsigned long args);
 	int	(*cpu_suspend)(int (*fn)(unsigned long), unsigned long args);
