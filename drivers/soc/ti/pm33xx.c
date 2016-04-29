@@ -84,9 +84,10 @@ static void am33xx_do_sram_idle(u32 wfi_flags)
 	if (!m3_ipc || !pm_ops)
 		return;
 
-	ret = m3_ipc->ops->prepare_low_power(m3_ipc, WKUP_M3_IDLE);
-	if (!ret)
-		pm_ops->cpu_suspend(am33xx_do_wfi_sram, wfi_flags);
+	if (wfi_flags & WFI_FLAG_WAKE_M3)
+		ret = m3_ipc->ops->prepare_low_power(m3_ipc, WKUP_M3_IDLE);
+
+	pm_ops->cpu_suspend(am33xx_do_wfi_sram, wfi_flags);
 }
 
 /*

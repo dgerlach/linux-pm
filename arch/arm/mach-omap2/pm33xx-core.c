@@ -44,6 +44,7 @@ static void __iomem *scu_base;
 static struct omap_hwmod *rtc_oh;
 
 static struct pinctrl_dev *pmx_dev;
+static int (*idle_fn)(u32 wfi_flags);
 
 static int __init am43xx_map_scu(void)
 {
@@ -60,7 +61,7 @@ static int am43xx_check_off_mode_enable(void)
 	return enable_off_mode;
 }
 
-static int amx3_common_init(void)
+static int amx3_common_init(int (*idle)(u32 wfi_flags))
 {
 	gfx_pwrdm = pwrdm_lookup("gfx_pwrdm");
 	per_pwrdm = pwrdm_lookup("per_pwrdm");
@@ -78,10 +79,12 @@ static int amx3_common_init(void)
 	else
 		pr_err("PM: Failed to get cefuse_pwrdm\n");
 
+	idle_fn = idle;
+
 	return 0;
 }
 
-static int am33xx_suspend_init(void (*do_sram_cpuidle)(u32 wfi_flags))
+static int am33xx_suspend_init(int (*idle)(u32 wfi_flags))
 {
 	int ret;
 
@@ -92,12 +95,12 @@ static int am33xx_suspend_init(void (*do_sram_cpuidle)(u32 wfi_flags))
 		return -ENODEV;
 	}
 
-	ret = amx3_common_init();
+	ret = amx3_common_init(idle);
 
 	return ret;
 }
 
-static int am43xx_suspend_init(void (*do_sram_cpuidle)(u32 wfi_flags))
+static int am43xx_suspend_init(int (*idle)(u32 wfi_flags))
 {
 	int ret = 0;
 
@@ -109,7 +112,7 @@ static int am43xx_suspend_init(void (*do_sram_cpuidle)(u32 wfi_flags))
 		return ret;
 	}
 
-	ret = amx3_common_init();
+	ret = amx3_common_init(idle);
 
 	return ret;
 }
@@ -345,7 +348,7 @@ static int am33xx_idle_enter(unsigned long index)
 {
 	u32 wfi_flags = 0;
 
-//	pr_info("ENTERING IDLE ALSO!\n");
+///	pr_info("ENTERING IDLE ALSO!\n");
 
 	switch (index) {
 	/* C1 state: Use wkup_m3 to idle MPU CLKDM */
@@ -354,13 +357,17 @@ static int am33xx_idle_enter(unsigned long index)
 		break;
 	};
 
-//	am33xx_do_sram_idle(wfi_flags);
+	if (idle_fn)
+		idle_fn(wfi_flags);
 
 	return index;
 }
 
 static int am43xx_idle_enter(unsigned long index)
 {
+	if (idle_fn)
+		idle_fn(0);
+
 	return index;
 }
 

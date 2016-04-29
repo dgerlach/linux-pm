@@ -80,7 +80,8 @@
 ENTRY(am43xx_do_wfi)
 	stmfd	sp!, {r4 - r11, lr}	@ save registers on stack
 
-	/* Move wfi_flags argument to a preserved register */
+	/* Save wfi_flags argument and move to a preserved register */
+	str	r0, wfi_flags
 	mov	r4, r0
 
 	/* Only flush cache is we know we are losing MPU context */
@@ -115,6 +116,9 @@ ENTRY(am43xx_do_wfi)
 	 */
 	ldr	r1, kernel_flush
 	blx	r1
+
+	/* v7_flush_dcache_all doesn't preserve registers so reload wfi_flags*/
+	ldr	r4, wfi_flags
 
 	/*
 	 * The kernel doesn't interwork: v7_flush_dcache_all in particluar will
@@ -223,10 +227,8 @@ wait_emif_disable:
 	cmp	r2, r3
 	bne	wait_emif_disable
 
-	ldr	r1, wfi_flags
-
 	/* Check if we are entering RTC mode */
-	tst	r1, #WFI_FLAG_RTC_ONLY
+	tst	r4, #WFI_FLAG_RTC_ONLY
 	beq	am43xx_deep_sleep_suspend
 
 	ldr	r1, rtc_base_virt
