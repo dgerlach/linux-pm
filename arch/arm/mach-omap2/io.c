@@ -341,10 +341,18 @@ void __init ti81xx_map_io(void)
 }
 #endif
 
-#if defined(CONFIG_SOC_AM33XX) || defined(CONFIG_SOC_AM43XX)
+#if defined(CONFIG_SOC_AM33XX)
 void __init am33xx_map_io(void)
 {
 	iotable_init(omapam33xx_io_desc, ARRAY_SIZE(omapam33xx_io_desc));
+}
+#endif
+
+#if defined(CONFIG_SOC_AM43XX)
+void __init am43xx_map_io(void)
+{
+	iotable_init(omapam33xx_io_desc, ARRAY_SIZE(omapam33xx_io_desc));
+	omap_barriers_init();
 }
 #endif
 
