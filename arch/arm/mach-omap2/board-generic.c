@@ -302,7 +302,7 @@ DT_MACHINE_START(AM43_DT, "Generic AM43 (Flattened Device Tree)")
 	.l2c_aux_val	= OMAP_L2C_AUX_CTRL,
 	.l2c_aux_mask	= 0xcf9fffff,
 	.l2c_write_sec	= omap4_l2c310_write_sec,
-	.map_io		= am33xx_map_io,
+	.map_io		= am43xx_map_io,
 	.init_early	= am43xx_init_early,
 	.init_late	= am43xx_init_late,
 	.init_irq	= omap_gic_of_init,
