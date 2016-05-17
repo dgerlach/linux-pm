@@ -63,7 +63,7 @@
 #define AM43XX_CM_PER_EMIF_CLKCTRL_OFFSET 0x0720
 #define AM43XX_PRM_EMIF_CTRL_OFFSET    0x30
 
-	.text
+	.data
 	.align 3
 
 ENTRY(am43xx_do_wfi)
