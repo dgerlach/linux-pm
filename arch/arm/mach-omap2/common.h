@@ -204,6 +204,7 @@ void __init omap242x_map_io(void);
 void __init omap243x_map_io(void);
 void __init omap3_map_io(void);
 void __init am33xx_map_io(void);
+void __init am43xx_map_io(void);
 void __init omap4_map_io(void);
 void __init omap5_map_io(void);
 void __init dra7xx_map_io(void);
