@@ -24,7 +24,7 @@
 #define AM33XX_CM_CLKCTRL_MODULEMODE_DISABLE			0x0003
 #define AM33XX_CM_CLKCTRL_MODULEMODE_ENABLE			0x0002
 
-	.text
+	.data
 	.align 3
 
 ENTRY(am33xx_do_wfi)
