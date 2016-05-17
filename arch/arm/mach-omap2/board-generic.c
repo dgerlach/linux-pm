@@ -298,6 +298,7 @@ static const char *const am43_boards_compat[] __initconst = {
 };
 
 DT_MACHINE_START(AM43_DT, "Generic AM43 (Flattened Device Tree)")
+	.reserve	= omap_reserve,
 	.l2c_aux_val	= OMAP_L2C_AUX_CTRL,
 	.l2c_aux_mask	= 0xcf9fffff,
 	.l2c_write_sec	= omap4_l2c310_write_sec,
