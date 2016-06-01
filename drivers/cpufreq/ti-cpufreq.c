@@ -23,8 +23,11 @@
 #include <linux/pm_opp.h>
 #include <linux/regmap.h>
 
-#define REVISION_MASK				(0xF << 28)
+#define REVISION_MASK				0xF
 #define REVISION_SHIFT				28
+
+#define AM33XX_800M_ARM_MPU_MAX_FREQ		0x1E2F
+#define AM43XX_600M_ARM_MPU_MAX_FREQ		0xFFA
 
 #define DRA7_EFUSE_HAS_OD_MPU_OPP		11
 #define DRA7_EFUSE_HAS_HIGH_MPU_OPP		15
@@ -42,12 +45,15 @@ static struct ti_cpufreq_data {
 	struct regmap *revision;
 } opp_data;
 
-static struct ti_cpufreq_soc_data {
+const static struct ti_cpufreq_soc_data {
 	unsigned long (*efuse_xlate)(unsigned long efuse);
+	unsigned long efuse_fallback;
 } *soc_data;
 
 static unsigned long amx3_efuse_xlate(unsigned long efuse)
 {
+	if (!efuse)
+		efuse = soc_data->efuse_fallback;
 	/* AM335x and AM437x use "OPP disable" bits, so invert */
 	return ~efuse;
 }
@@ -72,8 +78,14 @@ static unsigned long dra7_efuse_xlate(unsigned long efuse)
 	return calculated_efuse;
 }
 
-static struct ti_cpufreq_soc_data amx3_soc_data = {
+static struct ti_cpufreq_soc_data am3x_soc_data = {
 	.efuse_xlate = amx3_efuse_xlate,
+	.efuse_fallback = AM33XX_800M_ARM_MPU_MAX_FREQ,
+};
+
+static struct ti_cpufreq_soc_data am4x_soc_data = {
+	.efuse_xlate = amx3_efuse_xlate,
+	.efuse_fallback = AM43XX_600M_ARM_MPU_MAX_FREQ,
 };
 
 static struct ti_cpufreq_soc_data dra7_soc_data = {
@@ -91,27 +103,19 @@ static int ti_cpufreq_get_efuse(u32 *efuse_value)
 	struct device *dev = opp_data.cpu;
 	struct device_node *np = dev->of_node;
 	unsigned int efuse_offset;
-	u32 efuse, efuse_mask, efuse_shift;
+	u32 efuse, efuse_mask, efuse_shift, vals[4];
 	int ret;
 
-	ret = of_property_read_u32_index(np, "ti,syscon-efuse",
-					 1, &efuse_offset);
+	ret = of_property_read_u32_array(np, "ti,syscon-efuse", vals, 4);
 	if (ret) {
-		dev_err(dev,
-			"No efuse offset provided %s: %d\n",
-			np->full_name, ret);
+		dev_err(dev, "ti,syscon-efuse cannot be read %s: %d\n", np->full_name,
+			ret);
 		return ret;
 	}
 
-	ret = of_property_read_u32_index(np, "ti,syscon-efuse", 2,
-					 &efuse_mask);
-	if (ret)
-		efuse_mask = 0xffffffff;
-
-	ret = of_property_read_u32_index(np, "ti,syscon-efuse", 3,
-					 &efuse_shift);
-	if (ret)
-		efuse_shift = 0;
+	efuse_offset = vals[1];
+	efuse_mask = vals[2];
+	efuse_shift = vals[3];
 
 	ret = regmap_read(opp_data.opp_efuse, efuse_offset, &efuse);
 	if (ret) {
@@ -159,7 +163,7 @@ static int ti_cpufreq_get_rev(u32 *revision_value)
 		return ret;
 	}
 
-	*revision_value = BIT((revision & REVISION_MASK) >> REVISION_SHIFT);
+	*revision_value = BIT((revision >> REVISION_SHIFT) & REVISION_MASK);
 
 	return 0;
 }
@@ -186,25 +190,28 @@ static int ti_cpufreq_setup_syscon_registers(void)
 	return 0;
 }
 
-static struct ti_cpufreq_soc_data *ti_cpufreq_get_soc_data(void)
-{
-	if (of_machine_is_compatible("ti,am33xx") ||
-	    of_machine_is_compatible("ti,am4372"))
-		return &amx3_soc_data;
-	else if (of_machine_is_compatible("ti,dra7"))
-		return &dra7_soc_data;
-	else
-		return NULL;
-}
+static const struct of_device_id compatible_machine_match[] = {
+	{ .compatible = "ti,am33xx", .data = &am3x_soc_data, },
+	{ .compatible = "ti,am4372", .data = &am4x_soc_data, },
+	{ .compatible = "ti,dra7", .data = &dra7_soc_data },
+	{},
+};
 
-static int ti_cpufreq_init(void)
+static int __init ti_cpufreq_init(void)
 {
 	int ret;
 	u32 version[VERSION_COUNT];
+	struct device_node *root = of_find_node_by_path("/");
+	const struct of_device_id *match;
 
-	soc_data = ti_cpufreq_get_soc_data();
-	if (!soc_data)
+	if (!root)
 		return -ENODEV;
+
+	match = of_match_node(compatible_machine_match, root);
+	if (!match )
+		return -ENODEV;
+
+	soc_data = match->data;
 
 	opp_data.cpu = get_cpu_device(0);
 	if (!opp_data.cpu) {
