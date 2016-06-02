@@ -39,26 +39,30 @@
 
 #define VERSION_COUNT				2
 
-static struct ti_cpufreq_data {
-	struct device *cpu;
+struct ti_cpufreq_data;
+
+struct ti_cpufreq_soc_data {
+	unsigned long (*efuse_xlate)(struct ti_cpufreq_data *opp_data, unsigned long efuse);
+	unsigned long efuse_fallback;
+};
+
+struct ti_cpufreq_data {
+	struct device *cpu_dev;
+	struct device *opp_dev;
 	struct regmap *opp_efuse;
 	struct regmap *revision;
-} opp_data;
+	const struct ti_cpufreq_soc_data *soc_data;
+};
 
-const static struct ti_cpufreq_soc_data {
-	unsigned long (*efuse_xlate)(unsigned long efuse);
-	unsigned long efuse_fallback;
-} *soc_data;
-
-static unsigned long amx3_efuse_xlate(unsigned long efuse)
+static unsigned long amx3_efuse_xlate(struct ti_cpufreq_data *opp_data, unsigned long efuse)
 {
 	if (!efuse)
-		efuse = soc_data->efuse_fallback;
+		efuse = opp_data->soc_data->efuse_fallback;
 	/* AM335x and AM437x use "OPP disable" bits, so invert */
 	return ~efuse;
 }
 
-static unsigned long dra7_efuse_xlate(unsigned long efuse)
+static unsigned long dra7_efuse_xlate(struct ti_cpufreq_data *opp_data, unsigned long efuse)
 {
 	unsigned long calculated_efuse = DRA7_EFUSE_NOM_MPU_OPP;
 
@@ -98,9 +102,9 @@ static struct ti_cpufreq_soc_data dra7_soc_data = {
  *
  * Returns error code if efuse not read properly.
  */
-static int ti_cpufreq_get_efuse(u32 *efuse_value)
+static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data, u32 *efuse_value)
 {
-	struct device *dev = opp_data.cpu;
+	struct device *dev = opp_data->opp_dev;
 	struct device_node *np = dev->of_node;
 	unsigned int efuse_offset;
 	u32 efuse, efuse_mask, efuse_shift, vals[4];
@@ -117,7 +121,7 @@ static int ti_cpufreq_get_efuse(u32 *efuse_value)
 	efuse_mask = vals[2];
 	efuse_shift = vals[3];
 
-	ret = regmap_read(opp_data.opp_efuse, efuse_offset, &efuse);
+	ret = regmap_read(opp_data->opp_efuse, efuse_offset, &efuse);
 	if (ret) {
 		dev_err(dev,
 			"Failed to read the efuse value from syscon: %d\n",
@@ -127,7 +131,7 @@ static int ti_cpufreq_get_efuse(u32 *efuse_value)
 
 	efuse = (efuse & efuse_mask) >> efuse_shift;
 
-	*efuse_value = soc_data->efuse_xlate(efuse);
+	*efuse_value = opp_data->soc_data->efuse_xlate(opp_data, efuse);
 
 	return 0;
 }
@@ -138,9 +142,9 @@ static int ti_cpufreq_get_efuse(u32 *efuse_value)
  *
  * Returns error code if revision not read properly.
  */
-static int ti_cpufreq_get_rev(u32 *revision_value)
+static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data, u32 *revision_value)
 {
-	struct device *dev = opp_data.cpu;
+	struct device *dev = opp_data->opp_dev;
 	struct device_node *np = dev->of_node;
 	unsigned int revision_offset;
 	u32 revision;
@@ -155,7 +159,7 @@ static int ti_cpufreq_get_rev(u32 *revision_value)
 		return ret;
 	}
 
-	ret = regmap_read(opp_data.revision, revision_offset, &revision);
+	ret = regmap_read(opp_data->revision, revision_offset, &revision);
 	if (ret) {
 		dev_err(dev,
 			"Failed to read the revision number from syscon: %d\n",
@@ -168,64 +172,72 @@ static int ti_cpufreq_get_rev(u32 *revision_value)
 	return 0;
 }
 
-static int ti_cpufreq_setup_syscon_registers(void)
+static int ti_cpufreq_setup_syscon_registers(struct ti_cpufreq_data *opp_data)
 {
-	struct device *dev = opp_data.cpu;
+	struct device *dev = opp_data->opp_dev;
 	struct device_node *np = dev->of_node;
 
-	opp_data.opp_efuse = syscon_regmap_lookup_by_phandle(np,
+	opp_data->opp_efuse = syscon_regmap_lookup_by_phandle(np,
 							"ti,syscon-efuse");
-	if (IS_ERR(opp_data.opp_efuse)) {
+	if (IS_ERR(opp_data->opp_efuse)) {
 		dev_dbg(dev,  "\"ti,syscon-efuse\" is missing, cannot use OPPv2 table.\n");
-		return PTR_ERR(opp_data.opp_efuse);
+		return PTR_ERR(opp_data->opp_efuse);
 	}
 
-	opp_data.revision = syscon_regmap_lookup_by_phandle(np,
+	opp_data->revision = syscon_regmap_lookup_by_phandle(np,
 							"ti,syscon-rev");
-	if (IS_ERR(opp_data.revision)) {
+	if (IS_ERR(opp_data->revision)) {
 		dev_dbg(dev,  "\"ti,syscon-rev\" is missing, cannot use OPPv2 table.\n");
-		return PTR_ERR(opp_data.revision);
+		return PTR_ERR(opp_data->revision);
 	}
 
 	return 0;
 }
 
-static const struct of_device_id compatible_machine_match[] = {
-	{ .compatible = "ti,am33xx", .data = &am3x_soc_data, },
-	{ .compatible = "ti,am4372", .data = &am4x_soc_data, },
-	{ .compatible = "ti,dra7", .data = &dra7_soc_data },
+static const struct of_device_id ti_cpufreq_of_match[] = {
+	{ .compatible = "operating-points-v2-ti-am3352-cpu", .data = &am3x_soc_data, },
+	{ .compatible = "operating-points-v2-ti-am4372-cpu", .data = &am4x_soc_data, },
+	{ .compatible = "operating-points-v2-ti-dra7-cpu", .data = &dra7_soc_data },
 	{},
 };
+MODULE_DEVICE_TABLE(of, ti_cpufreq_of_match);
 
-static int __init ti_cpufreq_init(void)
+static int ti_cpufreq_probe(struct platform_device *pdev)
 {
 	int ret;
 	u32 version[VERSION_COUNT];
-	struct device_node *root = of_find_node_by_path("/");
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
 	const struct of_device_id *match;
+	struct ti_cpufreq_data *opp_data;
 
-	if (!root)
+	if (!np)
 		return -ENODEV;
 
-	match = of_match_node(compatible_machine_match, root);
-	if (!match )
+	match = of_match_node(ti_cpufreq_of_match, np);
+	if (!match)
 		return -ENODEV;
 
-	soc_data = match->data;
+	opp_data = devm_kzalloc(dev, sizeof(*opp_data), GFP_KERNEL);
+	if (!opp_data)
+		return -ENOMEM;
 
-	opp_data.cpu = get_cpu_device(0);
-	if (!opp_data.cpu) {
+	opp_data->soc_data = match->data;
+	opp_data->opp_dev = dev;
+
+	opp_data->cpu_dev = get_cpu_device(0);
+	if (!opp_data->cpu_dev) {
 		pr_err("%s: Failed to get device for CPU0\n", __func__);
 		return -ENODEV;
 	}
 
-	if (!of_get_property(opp_data.cpu->of_node, "operating-points-v2",
+	if (!of_get_property(opp_data->cpu_dev->of_node, "operating-points-v2",
 			     NULL)) {
-		dev_info(opp_data.cpu, "OPP-v2 not supported, cpufreq-dt will attempt to use legacy tables.\n");
+		dev_info(opp_data->cpu_dev, "OPP-v2 not supported, cpufreq-dt will attempt to use legacy tables.\n");
 		goto register_cpufreq_dt;
 	}
 
-	ret = ti_cpufreq_setup_syscon_registers();
+	ret = ti_cpufreq_setup_syscon_registers(opp_data);
 	if (ret)
 		goto register_cpufreq_dt;
 
@@ -235,26 +247,46 @@ static int __init ti_cpufreq_init(void)
 	 *	0 - SoC Revision
 	 *	1 - eFuse value
 	 */
-	ret = ti_cpufreq_get_rev(&version[0]);
+	ret = ti_cpufreq_get_rev(opp_data, &version[0]);
 	if (ret)
 		return ret;
 
-	ret = ti_cpufreq_get_efuse(&version[1]);
+	ret = ti_cpufreq_get_efuse(opp_data, &version[1]);
 	if (ret)
 		return ret;
 
-	ret = dev_pm_opp_set_supported_hw(opp_data.cpu, version, VERSION_COUNT);
+	ret = dev_pm_opp_set_supported_hw(opp_data->cpu_dev, version, VERSION_COUNT);
 	if (ret) {
-		dev_err(opp_data.cpu, "Failed to set supported hardware\n");
+		dev_err(opp_data->cpu_dev, "Failed to set supported hardware\n");
 		return ret;
 	}
 
 register_cpufreq_dt:
+	dev_set_drvdata(dev, opp_data);
 	platform_device_register_simple("cpufreq-dt", -1, NULL, 0);
 
 	return 0;
 }
-module_init(ti_cpufreq_init);
+
+static int ti_cpufreq_remove(struct platform_device *pdev)
+{
+	struct ti_cpufreq_data *opp_data = platform_get_drvdata(pdev);
+
+	dev_pm_opp_put_supported_hw(opp_data->cpu_dev);
+
+	return 0;
+}
+
+static struct platform_driver ti_cpufreq_driver = {
+	.probe = ti_cpufreq_probe,
+	.remove = ti_cpufreq_remove,
+	.driver = {
+		.name = "ti_cpufreq",
+		.of_match_table = ti_cpufreq_of_match,
+	},
+};
+
+module_platform_driver(ti_cpufreq_driver);
 
 MODULE_DESCRIPTION("TI CPUFreq/OPP hw-supported driver");
 MODULE_AUTHOR("Dave Gerlach <d-gerlach@ti.com>");
