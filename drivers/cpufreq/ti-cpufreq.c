@@ -104,7 +104,7 @@ static struct ti_cpufreq_soc_data dra7_soc_data = {
  */
 static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data, u32 *efuse_value)
 {
-	struct device *dev = opp_data->opp_dev;
+	struct device *dev = opp_data->cpu_dev;
 	struct device_node *np = dev->of_node;
 	unsigned int efuse_offset;
 	u32 efuse, efuse_mask, efuse_shift, vals[4];
@@ -144,7 +144,7 @@ static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data, u32 *efuse_val
  */
 static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data, u32 *revision_value)
 {
-	struct device *dev = opp_data->opp_dev;
+	struct device *dev = opp_data->cpu_dev;
 	struct device_node *np = dev->of_node;
 	unsigned int revision_offset;
 	u32 revision;
@@ -174,7 +174,7 @@ static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data, u32 *revision_va
 
 static int ti_cpufreq_setup_syscon_registers(struct ti_cpufreq_data *opp_data)
 {
-	struct device *dev = opp_data->opp_dev;
+	struct device *dev = opp_data->cpu_dev;
 	struct device_node *np = dev->of_node;
 
 	opp_data->opp_efuse = syscon_regmap_lookup_by_phandle(np,
