@@ -99,7 +99,7 @@
 	};
 
 	cpu0_opp_table: opp_table0 {
-		compatible = "operating-points-v2";
+		compatible = "operating-points-v2-ti-dra7-cpu";
 		opp-shared;
 
 		opp_nom@1000000000 {
