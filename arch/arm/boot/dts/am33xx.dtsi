@@ -57,7 +57,7 @@
 	};
 
 	cpu0_opp_table: opp_table0 {
-		compatible = "operating-points-v2";
+		compatible = "operating-points-v2-ti-am3352-cpu";
 
 		/*
 		 * The three following nodes are marked with opp-suspend
