@@ -815,3 +815,7 @@
 		status = "okay";
 	};
 };
+
+&cpu0 {
+	cpu0-supply = <&smps1_reg>;
+};
