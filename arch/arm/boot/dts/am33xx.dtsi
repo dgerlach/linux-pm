@@ -46,8 +46,6 @@
 			reg = <0>;
 
 			operating-points-v2 = <&cpu0_opp_table>;
-			ti,syscon-efuse = <&scm_conf 0x7fc 0x1fff 0>;
-			ti,syscon-rev = <&scm_conf 0x600>;
 
 			clocks = <&dpll_mpu_ck>;
 			clock-names = "cpu";
@@ -57,7 +55,9 @@
 	};
 
 	cpu0_opp_table: opp_table0 {
-		compatible = "operating-points-v2-ti-am3352-cpu";
+		compatible = "operating-points-v2-ti-cpu";
+		ti,syscon-efuse = <&scm_conf 0x7fc 0x1fff 0>;
+		ti,syscon-rev = <&scm_conf 0x600>;
 
 		/*
 		 * The three following nodes are marked with opp-suspend
