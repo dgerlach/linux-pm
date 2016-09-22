@@ -235,7 +235,7 @@ config ARM_TEGRA124_CPUFREQ
 	  This adds the CPUFreq driver support for Tegra124 SOCs.
 
 config ARM_TI_CPUFREQ
-	tristate "Texas Instruments CPUFreq support"
+	bool "Texas Instruments CPUFreq support"
 	depends on ARCH_OMAP2PLUS
 	help
 	  This driver enables valid OPPs on the running platform based on
