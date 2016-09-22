@@ -22,6 +22,7 @@
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
 #include <linux/regmap.h>
+#include <linux/slab.h>
 
 #define REVISION_MASK				0xF
 #define REVISION_SHIFT				28
@@ -49,7 +50,7 @@ struct ti_cpufreq_soc_data {
 
 struct ti_cpufreq_data {
 	struct device *cpu_dev;
-	struct device *opp_dev;
+	struct device_node *opp_node;
 	struct regmap *opp_efuse;
 	struct regmap *revision;
 	const struct ti_cpufreq_soc_data *soc_data;
@@ -110,7 +111,7 @@ static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data,
 				u32 *efuse_value)
 {
 	struct device *dev = opp_data->cpu_dev;
-	struct device_node *np = dev->of_node;
+	struct device_node *np = opp_data->opp_node;
 	unsigned int efuse_offset;
 	u32 efuse, efuse_mask, efuse_shift, vals[4];
 	int ret;
@@ -152,7 +153,7 @@ static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data,
 			      u32 *revision_value)
 {
 	struct device *dev = opp_data->cpu_dev;
-	struct device_node *np = dev->of_node;
+	struct device_node *np = opp_data->opp_node;
 	unsigned int revision_offset;
 	u32 revision;
 	int ret;
@@ -182,7 +183,7 @@ static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data,
 static int ti_cpufreq_setup_syscon_registers(struct ti_cpufreq_data *opp_data)
 {
 	struct device *dev = opp_data->cpu_dev;
-	struct device_node *np = dev->of_node;
+	struct device_node *np = opp_data->opp_node;
 
 	opp_data->opp_efuse = syscon_regmap_lookup_by_phandle(np,
 							"ti,syscon-efuse");
@@ -204,38 +205,35 @@ static int ti_cpufreq_setup_syscon_registers(struct ti_cpufreq_data *opp_data)
 }
 
 static const struct of_device_id ti_cpufreq_of_match[] = {
-	{ .compatible = "operating-points-v2-ti-am3352-cpu",
+	{ .compatible = "ti,am33xx",
 	  .data = &am3x_soc_data, },
-	{ .compatible = "operating-points-v2-ti-am4372-cpu",
+	{ .compatible = "ti,am4372",
 	  .data = &am4x_soc_data, },
-	{ .compatible = "operating-points-v2-ti-dra7-cpu",
+	{ .compatible = "ti,dra7",
 	  .data = &dra7_soc_data },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ti_cpufreq_of_match);
 
-static int ti_cpufreq_probe(struct platform_device *pdev)
+static int ti_cpufreq_init(void)
 {
 	int ret;
 	u32 version[VERSION_COUNT];
-	struct device *dev = &pdev->dev;
-	struct device_node *np = dev->of_node;
+	struct device_node *np;
 	const struct of_device_id *match;
 	struct ti_cpufreq_data *opp_data;
 
-	if (!np)
-		return -ENODEV;
+	np = of_find_node_by_path("/");
 
 	match = of_match_node(ti_cpufreq_of_match, np);
 	if (!match)
 		return -ENODEV;
 
-	opp_data = devm_kzalloc(dev, sizeof(*opp_data), GFP_KERNEL);
+	opp_data = kzalloc(sizeof(*opp_data), GFP_KERNEL);
 	if (!opp_data)
 		return -ENOMEM;
 
 	opp_data->soc_data = match->data;
-	opp_data->opp_dev = dev;
 
 	opp_data->cpu_dev = get_cpu_device(0);
 	if (!opp_data->cpu_dev) {
@@ -243,8 +241,8 @@ static int ti_cpufreq_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	if (!of_get_property(opp_data->cpu_dev->of_node, "operating-points-v2",
-			     NULL)) {
+	opp_data->opp_node = pm_opp_of_get_opp_desc_node(opp_data->cpu_dev);
+	if (!opp_data->opp_node) {
 		dev_info(opp_data->cpu_dev,
 			 "OPP-v2 not supported, cpufreq-dt will attempt to use legacy tables.\n");
 		goto register_cpufreq_dt;
@@ -277,31 +275,11 @@ static int ti_cpufreq_probe(struct platform_device *pdev)
 	}
 
 register_cpufreq_dt:
-	dev_set_drvdata(dev, opp_data);
 	platform_device_register_simple("cpufreq-dt", -1, NULL, 0);
 
 	return 0;
 }
-
-static int ti_cpufreq_remove(struct platform_device *pdev)
-{
-	struct ti_cpufreq_data *opp_data = platform_get_drvdata(pdev);
-
-	dev_pm_opp_put_supported_hw(opp_data->cpu_dev);
-
-	return 0;
-}
-
-static struct platform_driver ti_cpufreq_driver = {
-	.probe = ti_cpufreq_probe,
-	.remove = ti_cpufreq_remove,
-	.driver = {
-		.name = "ti_cpufreq",
-		.of_match_table = ti_cpufreq_of_match,
-	},
-};
-
-module_platform_driver(ti_cpufreq_driver);
+module_init(ti_cpufreq_init);
 
 MODULE_DESCRIPTION("TI CPUFreq/OPP hw-supported driver");
 MODULE_AUTHOR("Dave Gerlach <d-gerlach@ti.com>");
