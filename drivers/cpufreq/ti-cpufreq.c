@@ -250,7 +250,7 @@ static int ti_cpufreq_init(void)
 
 	ret = ti_cpufreq_setup_syscon_registers(opp_data);
 	if (ret)
-		return ret;
+		goto fail_put_node;
 
 	/*
 	 * OPPs determine whether or not they are supported based on
@@ -260,11 +260,13 @@ static int ti_cpufreq_init(void)
 	 */
 	ret = ti_cpufreq_get_rev(opp_data, &version[0]);
 	if (ret)
-		return ret;
+		goto fail_put_node;
 
 	ret = ti_cpufreq_get_efuse(opp_data, &version[1]);
 	if (ret)
 		return ret;
+
+	of_node_put(opp_data->opp_node);
 
 	ret = dev_pm_opp_set_supported_hw(opp_data->cpu_dev, version,
 					  VERSION_COUNT);
@@ -278,6 +280,11 @@ register_cpufreq_dt:
 	platform_device_register_simple("cpufreq-dt", -1, NULL, 0);
 
 	return 0;
+
+fail_put_node:
+	of_node_put(opp_data->opp_node);
+
+	return ret;
 }
 module_init(ti_cpufreq_init);
 
