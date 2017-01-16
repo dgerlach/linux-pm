@@ -57,8 +57,7 @@
 
 	cpu0_opp_table: opp_table0 {
 		compatible = "operating-points-v2-ti-cpu";
-		ti,syscon-efuse = <&scm_conf 0x7fc 0x1fff 0>;
-		ti,syscon-rev = <&scm_conf 0x600>;
+		syscon = <&scm_conf>;
 
 		/*
 		 * The three following nodes are marked with opp-suspend
