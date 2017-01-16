@@ -16,10 +16,8 @@ In 'cpus' nodes:
 In 'operating-points-v2' table:
 - compatible: Should be
 	- 'operating-points-v2-ti' for am335x, am43xx, and dra7xx/am57xx SoCs
-- ti,syscon-efuse: Syscon phandle, offset to efuse register, efuse register
-		   mask, and efuse register shift to get the relevant bits
-		   that describe OPP availability.
-- ti,syscon-rev: Syscon and offset used to look up revision value on SoC.
+- syscon: A phandle pointing to a syscon node representing the control module
+	  register space of the SoC.
 
 Optional properties:
 --------------------
@@ -59,8 +57,7 @@ cpus {
  */
 cpu0_opp_table: opp_table0 {
 	compatible = "operating-points-v2-ti-am3352-cpu";
-	ti,syscon-efuse = <&scm_conf 0x7fc 0x1fff 0>;
-	ti,syscon-rev = <&scm_conf 0x600>;
+	syscon = <&scm_conf>;
 
 	/*
 	 * The three following nodes are marked with opp-suspend
