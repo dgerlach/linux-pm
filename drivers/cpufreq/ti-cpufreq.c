@@ -46,13 +46,16 @@ struct ti_cpufreq_soc_data {
 	unsigned long (*efuse_xlate)(struct ti_cpufreq_data *opp_data,
 				     unsigned long efuse);
 	unsigned long efuse_fallback;
+	unsigned long efuse_offset;
+	unsigned long efuse_mask;
+	unsigned long efuse_shift;
+	unsigned long rev_offset;
 };
 
 struct ti_cpufreq_data {
 	struct device *cpu_dev;
 	struct device_node *opp_node;
-	struct regmap *opp_efuse;
-	struct regmap *revision;
+	struct regmap *syscon;
 	const struct ti_cpufreq_soc_data *soc_data;
 };
 
@@ -89,15 +92,25 @@ static unsigned long dra7_efuse_xlate(struct ti_cpufreq_data *opp_data,
 static struct ti_cpufreq_soc_data am3x_soc_data = {
 	.efuse_xlate = amx3_efuse_xlate,
 	.efuse_fallback = AM33XX_800M_ARM_MPU_MAX_FREQ,
+	.efuse_offset = 0x07fc,
+	.efuse_mask = 0x1fff,
+	.rev_offset = 0x600,
 };
 
 static struct ti_cpufreq_soc_data am4x_soc_data = {
 	.efuse_xlate = amx3_efuse_xlate,
 	.efuse_fallback = AM43XX_600M_ARM_MPU_MAX_FREQ,
+	.efuse_offset = 0x0610,
+	.efuse_mask = 0x3f,
+	.rev_offset = 0x600,
 };
 
 static struct ti_cpufreq_soc_data dra7_soc_data = {
 	.efuse_xlate = dra7_efuse_xlate,
+	.efuse_offset = 0x020c,
+	.efuse_mask = 0xf80000,
+	.efuse_shift = 19,
+	.rev_offset = 0x204,
 };
 
 /**
@@ -111,23 +124,10 @@ static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data,
 				u32 *efuse_value)
 {
 	struct device *dev = opp_data->cpu_dev;
-	struct device_node *np = opp_data->opp_node;
-	unsigned int efuse_offset;
-	u32 efuse, efuse_mask, efuse_shift, vals[4];
+	u32 efuse;
 	int ret;
 
-	ret = of_property_read_u32_array(np, "ti,syscon-efuse", vals, 4);
-	if (ret) {
-		dev_err(dev, "ti,syscon-efuse cannot be read %s: %d\n",
-			np->full_name, ret);
-		return ret;
-	}
-
-	efuse_offset = vals[1];
-	efuse_mask = vals[2];
-	efuse_shift = vals[3];
-
-	ret = regmap_read(opp_data->opp_efuse, efuse_offset, &efuse);
+	ret = regmap_read(opp_data->syscon, opp_data->soc_data->efuse_offset, &efuse);
 	if (ret) {
 		dev_err(dev,
 			"Failed to read the efuse value from syscon: %d\n",
@@ -135,7 +135,8 @@ static int ti_cpufreq_get_efuse(struct ti_cpufreq_data *opp_data,
 		return ret;
 	}
 
-	efuse = (efuse & efuse_mask) >> efuse_shift;
+	efuse = (efuse & opp_data->soc_data->efuse_mask);
+	efuse >>= opp_data->soc_data->efuse_shift;
 
 	*efuse_value = opp_data->soc_data->efuse_xlate(opp_data, efuse);
 
@@ -153,21 +154,11 @@ static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data,
 			      u32 *revision_value)
 {
 	struct device *dev = opp_data->cpu_dev;
-	struct device_node *np = opp_data->opp_node;
-	unsigned int revision_offset;
 	u32 revision;
 	int ret;
 
-	ret = of_property_read_u32_index(np, "ti,syscon-rev",
-					 1, &revision_offset);
-	if (ret) {
-		dev_err(dev,
-			"No revision offset provided %s [%d]\n",
-			np->full_name, ret);
-		return ret;
-	}
-
-	ret = regmap_read(opp_data->revision, revision_offset, &revision);
+	ret = regmap_read(opp_data->syscon, opp_data->soc_data->rev_offset,
+			  &revision);
 	if (ret) {
 		dev_err(dev,
 			"Failed to read the revision number from syscon: %d\n",
@@ -180,25 +171,17 @@ static int ti_cpufreq_get_rev(struct ti_cpufreq_data *opp_data,
 	return 0;
 }
 
-static int ti_cpufreq_setup_syscon_registers(struct ti_cpufreq_data *opp_data)
+static int ti_cpufreq_setup_syscon_register(struct ti_cpufreq_data *opp_data)
 {
 	struct device *dev = opp_data->cpu_dev;
 	struct device_node *np = opp_data->opp_node;
 
-	opp_data->opp_efuse = syscon_regmap_lookup_by_phandle(np,
-							"ti,syscon-efuse");
-	if (IS_ERR(opp_data->opp_efuse)) {
+	opp_data->syscon = syscon_regmap_lookup_by_phandle(np,
+							"syscon");
+	if (IS_ERR(opp_data->syscon)) {
 		dev_err(dev,
-			"\"ti,syscon-efuse\" is missing, cannot use OPPv2 table.\n");
-		return PTR_ERR(opp_data->opp_efuse);
-	}
-
-	opp_data->revision = syscon_regmap_lookup_by_phandle(np,
-							"ti,syscon-rev");
-	if (IS_ERR(opp_data->revision)) {
-		dev_err(dev,
-			"\"ti,syscon-rev\" is missing, cannot use OPPv2 table.\n");
-		return PTR_ERR(opp_data->revision);
+			"\"syscon\" is missing, cannot use OPPv2 table.\n");
+		return PTR_ERR(opp_data->syscon);
 	}
 
 	return 0;
@@ -243,7 +226,7 @@ static int ti_cpufreq_init(void)
 		goto register_cpufreq_dt;
 	}
 
-	ret = ti_cpufreq_setup_syscon_registers(opp_data);
+	ret = ti_cpufreq_setup_syscon_register(opp_data);
 	if (ret)
 		goto fail_put_node;
 
