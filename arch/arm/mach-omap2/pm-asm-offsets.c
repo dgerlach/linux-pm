@@ -14,9 +14,14 @@
  */
 #include <linux/kbuild.h>
 #include <linux/platform_data/pm33xx.h>
+#include <linux/ti-emif-sram.h>
 
 int main(void)
 {
+	ti_emif_offsets();
+
+	BLANK();
+
 	DEFINE(AMX3_PM_WFI_FLAGS_OFFSET,
 	       offsetof(struct am33xx_pm_sram_data, wfi_flags));
 	DEFINE(AMX3_PM_L2_AUX_CTRL_VAL_OFFSET,

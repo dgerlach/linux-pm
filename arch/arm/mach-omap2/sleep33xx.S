@@ -14,7 +14,6 @@
  * GNU General Public License for more details.
  */
 
-#include <generated/ti-emif-asm-offsets.h>
 #include <generated/ti-pm-asm-offsets.h>
 #include <linux/linkage.h>
 #include <linux/ti-emif-sram.h>
